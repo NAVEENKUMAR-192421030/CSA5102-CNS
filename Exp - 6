@@ -1,0 +1,91 @@
+import javax.swing.*;
+import java.security.SecureRandom;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
+import java.util.Random;
+
+public class DES {
+    private byte[] rawKey;
+    private String inputMessage, encryptedData, decryptedMessage;
+    
+    public DES() {
+        try {
+            generateSymmetricKey();
+            
+             
+            inputMessage = "Hello World"; 
+            
+            System.out.println("Original message: " + inputMessage);
+            
+            byte[] ibyte = inputMessage.getBytes();
+            byte[] ebyte = encrypt(rawKey, ibyte);
+            
+            // Use Base64 encoding for proper string representation
+            encryptedData = Base64.getEncoder().encodeToString(ebyte);
+            System.out.println("Encrypted message: " + encryptedData);
+            
+            // For local execution with GUI
+            // JOptionPane.showMessageDialog(null, "Encrypted Data\n" + encryptedData);
+            
+            byte[] dbyte = decrypt(rawKey, Base64.getDecoder().decode(encryptedData));
+            decryptedMessage = new String(dbyte);
+            System.out.println("Decrypted message: " + decryptedMessage);
+            
+            // For local execution with GUI
+            // JOptionPane.showMessageDialog(null, "Decrypted Data\n" + decryptedMessage);
+            
+        } catch(Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    void generateSymmetricKey() {
+        try {
+            Random r = new Random();
+            int num = r.nextInt(10000);
+            String knum = String.valueOf(num);
+            byte[] knumb = knum.getBytes();
+            rawKey = getRawKey(knumb);
+            String skeyString = Base64.getEncoder().encodeToString(rawKey);
+            System.out.println("DES Symmetric key (Base64): " + skeyString);
+        } catch(Exception e) {
+            System.out.println("Key generation error: " + e.getMessage());
+        }
+    }
+    
+    private static byte[] getRawKey(byte[] seed) throws Exception {
+        KeyGenerator kgen = KeyGenerator.getInstance("DES");
+        SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
+        sr.setSeed(seed);
+        kgen.init(56, sr);
+        SecretKey skey = kgen.generateKey();
+        return skey.getEncoded();
+    }
+    
+    private static byte[] encrypt(byte[] raw, byte[] clear) throws Exception {
+        SecretKeySpec skeySpec = new SecretKeySpec(raw, "DES");
+        Cipher cipher = Cipher.getInstance("DES/ECB/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, skeySpec);
+        return cipher.doFinal(clear);
+    }
+    
+    private static byte[] decrypt(byte[] raw, byte[] encrypted) throws Exception {
+        SecretKeySpec skeySpec = new SecretKeySpec(raw, "DES");
+        Cipher cipher = Cipher.getInstance("DES/ECB/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, skeySpec);
+        return cipher.doFinal(encrypted);
+    }
+    
+    public static void main(String args[]) {
+        
+        try {
+            DES des = new DES();
+        } catch (Exception e) {
+            System.out.println("Main method error: " + e.getMessage());
+        }
+    }
+}
