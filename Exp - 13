@@ -1,0 +1,211 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MATRIX_SIZE 2
+
+
+int determinant(int key[MATRIX_SIZE][MATRIX_SIZE]) {
+    return (key[0][0] * key[1][1] - key[0][1] * key[1][0]);
+}
+
+
+int modInverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    return -1; 
+}
+
+// Function to calculate the modular inverse of a 2x2 matrix
+void inverseMatrix(int key[MATRIX_SIZE][MATRIX_SIZE], int inv[MATRIX_SIZE][MATRIX_SIZE], int mod) {
+    int det = determinant(key);
+    int det_inv = modInverse(det, mod);
+    
+    if (det_inv == -1) {
+        printf("Error: Matrix is not invertible modulo %d\n", mod);
+        exit(1);
+    }
+    
+    // Calculate the adjugate matrix
+    inv[0][0] = key[1][1];
+    inv[0][1] = (-key[0][1] + mod) % mod;
+    inv[1][0] = (-key[1][0] + mod) % mod;
+    inv[1][1] = key[0][0];
+    
+    // Multiply by determinant inverse
+    for (int i = 0; i < MATRIX_SIZE; i++) {
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            inv[i][j] = (inv[i][j] * det_inv) % mod;
+            if (inv[i][j] < 0) {
+                inv[i][j] += mod;
+            }
+        }
+    }
+}
+
+// Function to prepare text (convert to uppercase and pad if necessary)
+void prepareText(char *text, int mod) {
+    int len = strlen(text);
+    
+    // Convert to uppercase
+    for (int i = 0; i < len; i++) {
+        text[i] = toupper(text[i]);
+    }
+    
+    // Pad with 'X' if length is odd
+    if (len % MATRIX_SIZE != 0) {
+        text[len] = 'X';
+        text[len + 1] = '\0';
+    }
+}
+
+// Function to convert character to number (A=0, B=1, ..., Z=25)
+int charToNum(char c) {
+    return c - 'A';
+}
+
+// Function to convert number to character
+char numToChar(int n) {
+    return (n % 26) + 'A';
+}
+
+// Function to encrypt text using Hill Cipher
+void hillEncrypt(char *plaintext, int key[MATRIX_SIZE][MATRIX_SIZE], char *ciphertext, int mod) {
+    int len = strlen(plaintext);
+    int vector[MATRIX_SIZE], result[MATRIX_SIZE];
+    
+    for (int i = 0; i < len; i += MATRIX_SIZE) {
+        // Convert characters to numbers
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            vector[j] = charToNum(plaintext[i + j]);
+        }
+        
+        // Matrix multiplication
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            result[j] = 0;
+            for (int k = 0; k < MATRIX_SIZE; k++) {
+                result[j] += key[j][k] * vector[k];
+            }
+            result[j] %= mod;
+        }
+        
+        // Convert numbers back to characters
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            ciphertext[i + j] = numToChar(result[j]);
+        }
+    }
+    ciphertext[len] = '\0';
+}
+
+// Function to decrypt text using Hill Cipher
+void hillDecrypt(char *ciphertext, int key[MATRIX_SIZE][MATRIX_SIZE], char *plaintext, int mod) {
+    int len = strlen(ciphertext);
+    int invKey[MATRIX_SIZE][MATRIX_SIZE];
+    int vector[MATRIX_SIZE], result[MATRIX_SIZE];
+    
+    // Calculate inverse key matrix
+    inverseMatrix(key, invKey, mod);
+    
+    for (int i = 0; i < len; i += MATRIX_SIZE) {
+        // Convert characters to numbers
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            vector[j] = charToNum(ciphertext[i + j]);
+        }
+        
+        // Matrix multiplication with inverse key
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            result[j] = 0;
+            for (int k = 0; k < MATRIX_SIZE; k++) {
+                result[j] += invKey[j][k] * vector[k];
+            }
+            result[j] %= mod;
+            if (result[j] < 0) {
+                result[j] += mod;
+            }
+        }
+        
+        // Convert numbers back to characters
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            plaintext[i + j] = numToChar(result[j]);
+        }
+    }
+    plaintext[len] = '\0';
+}
+
+// Function to print matrix
+void printMatrix(int matrix[MATRIX_SIZE][MATRIX_SIZE]) {
+    for (int i = 0; i < MATRIX_SIZE; i++) {
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            printf("%d ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+int main() {
+    char plaintext[100], ciphertext[100], decrypted[100];
+    int mod = 26; // Modulo 26 for English alphabet
+    
+    // Example key matrix (must be invertible modulo 26)
+    int key[MATRIX_SIZE][MATRIX_SIZE] = {
+        {3, 3},
+        {2, 5}
+    };
+    
+    printf("=== Hill Cipher Implementation ===\n\n");
+    
+    // Get input from user
+    printf("Enter plaintext (letters only): ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+    
+    // Remove newline character
+    plaintext[strcspn(plaintext, "\n")] = 0;
+    
+    // Prepare text
+    prepareText(plaintext, mod);
+    
+    printf("\nOriginal text: %s\n", plaintext);
+    printf("Key matrix:\n");
+    printMatrix(key);
+    
+    // Encrypt
+    hillEncrypt(plaintext, key, ciphertext, mod);
+    printf("\nEncrypted text: %s\n", ciphertext);
+    
+    // Decrypt
+    hillDecrypt(ciphertext, key, decrypted, mod);
+    printf("Decrypted text: %s\n", decrypted);
+    
+    // Verify
+    if (strcmp(plaintext, decrypted) == 0) {
+        printf("\n✓ Encryption and decryption successful!\n");
+    } else {
+        printf("\n✗ Error in encryption/decryption!\n");
+    }
+    
+    printf("\n=== Additional Test Cases ===\n");
+    
+    // Test with different inputs
+    char test1[] = "HELLO";
+    char test2[] = "CRYPTOGRAPHY";
+    char cipher1[100], cipher2[100], decrypt1[100], decrypt2[100];
+    
+    printf("\nTest 1: %s\n", test1);
+    hillEncrypt(test1, key, cipher1, mod);
+    printf("Encrypted: %s\n", cipher1);
+    hillDecrypt(cipher1, key, decrypt1, mod);
+    printf("Decrypted: %s\n", decrypt1);
+    
+    printf("\nTest 2: %s\n", test2);
+    hillEncrypt(test2, key, cipher2, mod);
+    printf("Encrypted: %s\n", cipher2);
+    hillDecrypt(cipher2, key, decrypt2, mod);
+    printf("Decrypted: %s\n", decrypt2);
+    
+    return 0;
+}
