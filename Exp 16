@@ -1,0 +1,189 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+
+typedef enum {
+    MODULE_UNAVAILABLE,
+    MODULE_LOADING,
+    MODULE_AVAILABLE,
+    MODULE_ERROR
+} ModuleStatus;
+
+
+typedef struct {
+    char name[50];
+    ModuleStatus status;
+    int load_progress;
+} Module;
+
+
+ModuleStatus check_module_status(const char *module_name) {
+    
+    int chance = rand() % 100;
+    
+    if (chance < 40) {
+        return MODULE_UNAVAILABLE;
+    } else if (chance < 70) {
+        return MODULE_LOADING;
+    } else if (chance < 90) {
+        return MODULE_AVAILABLE;
+    } else {
+        return MODULE_ERROR;
+    }
+}
+
+// Function to get status message
+const char* get_status_message(ModuleStatus status) {
+    switch (status) {
+        case MODULE_UNAVAILABLE:
+            return "isn't available at the moment. It will be available soon.";
+        case MODULE_LOADING:
+            return "is currently loading. Please wait...";
+        case MODULE_AVAILABLE:
+            return "is available and ready to use.";
+        case MODULE_ERROR:
+            return "encountered an error during loading.";
+        default:
+            return "has an unknown status.";
+    }
+}
+
+// Function to simulate module loading progress
+void simulate_loading(const char *module_name) {
+    printf("\nLoading module '%s':\n", module_name);
+    for (int i = 0; i <= 100; i += 10) {
+        printf("[");
+        for (int j = 0; j < 10; j++) {
+            if (j < i/10) printf("=");
+            else printf(" ");
+        }
+        printf("] %d%%\r", i);
+        fflush(stdout);
+        
+        // Simulate loading time
+        for (int k = 0; k < 10000000; k++);
+    }
+    printf("\nModule '%s' loaded successfully!\n", module_name);
+}
+
+// Main function demonstrating module availability checking
+void check_modules() {
+    char *modules[] = {
+        "crypto_lib",
+        "network_utils",
+        "data_processor",
+        "ai_module",
+        "security_layer",
+        "database_connector",
+        NULL
+    };
+    
+    printf("=== MODULE AVAILABILITY CHECK ===\n\n");
+    
+    for (int i = 0; modules[i] != NULL; i++) {
+        ModuleStatus status = check_module_status(modules[i]);
+        
+        printf("Module '%s' %s\n", modules[i], get_status_message(status));
+        
+        // If module is loading, show progress
+        if (status == MODULE_LOADING) {
+            simulate_loading(modules[i]);
+        }
+        
+        printf("\n");
+    }
+}
+
+// Function to demonstrate error handling when module is unavailable
+void try_to_use_module(const char *module_name) {
+    printf("Attempting to use module '%s'...\n", module_name);
+    
+    ModuleStatus status = check_module_status(module_name);
+    
+    if (status != MODULE_AVAILABLE) {
+        printf("ERROR: A module you have imported (%s) %s\n", 
+               module_name, get_status_message(status));
+        
+        if (status == MODULE_UNAVAILABLE) {
+            printf("Suggested actions:\n");
+            printf("1. Wait a few moments and try again\n");
+            printf("2. Check your internet connection\n");
+            printf("3. Restart the application\n");
+            printf("4. Contact support if problem persists\n");
+        }
+    } else {
+        printf("SUCCESS: Module '%s' is working correctly!\n", module_name);
+    }
+    printf("----------------------------------------\n");
+}
+
+// Interactive module manager
+void interactive_module_manager() {
+    printf("\n=== INTERACTIVE MODULE MANAGER ===\n");
+    
+    while (1) {
+        printf("\nEnter module name to check (or 'quit' to exit): ");
+        char module_name[50];
+        fgets(module_name, sizeof(module_name), stdin);
+        module_name[strcspn(module_name, "\n")] = 0;
+        
+        if (strcmp(module_name, "quit") == 0 || 
+            strcmp(module_name, "exit") == 0) {
+            break;
+        }
+        
+        if (strlen(module_name) == 0) {
+            printf("Please enter a valid module name.\n");
+            continue;
+        }
+        
+        try_to_use_module(module_name);
+    }
+}
+
+// Simulate the exact error message from the user
+void show_exact_error() {
+    printf("\n=== EXACT ERROR SIMULATION ===\n\n");
+    printf("A module you have imported isn't available at the moment.\n");
+    printf("It will be available soon.\n\n");
+    
+    printf("Technical details:\n");
+    printf("- Module: crypto_lib\n");
+    printf("- Status: Unavailable\n");
+    printf("- Estimated availability: 2-5 minutes\n");
+    printf("- Error code: MOD_UNAVAIL_001\n");
+}
+
+int main() {
+    srand(time(NULL)); // Seed random number generator
+    
+    printf("=== MODULE AVAILABILITY SIMULATOR ===\n\n");
+    
+    // Show the exact error first
+    show_exact_error();
+    
+    // Demonstrate module checking
+    check_modules();
+    
+    // Show what happens when trying to use unavailable modules
+    printf("\n=== MODULE USAGE ATTEMPTS ===\n");
+    try_to_use_module("crypto_lib");
+    try_to_use_module("network_utils");
+    try_to_use_module("ai_processor");
+    
+    // Interactive section
+    interactive_module_manager();
+    
+    printf("\n=== TROUBLESHOOTING TIPS ===\n");
+    printf("If you encounter module availability issues:\n");
+    printf("1. Check your internet connection\n");
+    printf("2. Verify module name spelling\n");
+    printf("3. Ensure you have proper permissions\n");
+    printf("4. Wait for dependencies to load\n");
+    printf("5. Restart your application\n");
+    printf("6. Check service status pages\n");
+    
+    return 0;
+}
