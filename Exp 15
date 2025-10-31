@@ -1,0 +1,275 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define BLOCK_SIZE 8  // 64-bit blocks for simplicity
+
+// Simple XOR cipher for demonstration (replace with actual block cipher in practice)
+void block_encrypt(const uint8_t *input, uint8_t *output, const uint8_t *key, int key_len) {
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        output[i] = input[i] ^ key[i % key_len];
+    }
+}
+
+void block_decrypt(const uint8_t *input, uint8_t *output, const uint8_t *key, int key_len) {
+    // For XOR cipher, encryption and decryption are the same
+    block_encrypt(input, output, key, key_len);
+}
+
+// Utility functions
+void print_hex(const uint8_t *data, int len, const char *label) {
+    printf("%s: ", label);
+    for (int i = 0; i < len; i++) {
+        printf("%02X ", data[i]);
+    }
+    printf("\n");
+}
+
+void print_text(const uint8_t *data, int len, const char *label) {
+    printf("%s: ", label);
+    for (int i = 0; i < len; i++) {
+        if (data[i] >= 32 && data[i] <= 126) {
+            printf("%c", data[i]);
+        } else {
+            printf(".");
+        }
+    }
+    printf("\n");
+}
+
+// PKCS7 Padding
+int add_padding(uint8_t *data, int data_len, int block_size) {
+    int padding = block_size - (data_len % block_size);
+    for (int i = 0; i < padding; i++) {
+        data[data_len + i] = padding;
+    }
+    return data_len + padding;
+}
+
+int remove_padding(uint8_t *data, int data_len) {
+    int padding = data[data_len - 1];
+    if (padding > 0 && padding <= BLOCK_SIZE) {
+        return data_len - padding;
+    }
+    return data_len;
+}
+
+// ECB Mode
+void ecb_encrypt(const uint8_t *plaintext, uint8_t *ciphertext, int length, 
+                 const uint8_t *key, int key_len) {
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        block_encrypt(plaintext + i * BLOCK_SIZE, 
+                     ciphertext + i * BLOCK_SIZE, key, key_len);
+    }
+}
+
+void ecb_decrypt(const uint8_t *ciphertext, uint8_t *plaintext, int length, 
+                 const uint8_t *key, int key_len) {
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        block_decrypt(ciphertext + i * BLOCK_SIZE, 
+                     plaintext + i * BLOCK_SIZE, key, key_len);
+    }
+}
+
+// CBC Mode
+void cbc_encrypt(const uint8_t *plaintext, uint8_t *ciphertext, int length, 
+                 const uint8_t *key, int key_len, const uint8_t *iv) {
+    uint8_t previous_block[BLOCK_SIZE];
+    uint8_t current_block[BLOCK_SIZE];
+    
+    // Copy IV to previous_block for first iteration
+    memcpy(previous_block, iv, BLOCK_SIZE);
+    
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        // XOR with previous ciphertext block (or IV for first block)
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            current_block[j] = plaintext[i * BLOCK_SIZE + j] ^ previous_block[j];
+        }
+        
+        // Encrypt the result
+        block_encrypt(current_block, ciphertext + i * BLOCK_SIZE, key, key_len);
+        
+        // Update previous block for next iteration
+        memcpy(previous_block, ciphertext + i * BLOCK_SIZE, BLOCK_SIZE);
+    }
+}
+
+void cbc_decrypt(const uint8_t *ciphertext, uint8_t *plaintext, int length, 
+                 const uint8_t *key, int key_len, const uint8_t *iv) {
+    uint8_t previous_block[BLOCK_SIZE];
+    uint8_t current_block[BLOCK_SIZE];
+    
+    // Copy IV to previous_block for first iteration
+    memcpy(previous_block, iv, BLOCK_SIZE);
+    
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        // Decrypt current block
+        block_decrypt(ciphertext + i * BLOCK_SIZE, current_block, key, key_len);
+        
+        // XOR with previous ciphertext block (or IV for first block)
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            plaintext[i * BLOCK_SIZE + j] = current_block[j] ^ previous_block[j];
+        }
+        
+        // Update previous block for next iteration
+        memcpy(previous_block, ciphertext + i * BLOCK_SIZE, BLOCK_SIZE);
+    }
+}
+
+// CFB Mode
+void cfb_encrypt(const uint8_t *plaintext, uint8_t *ciphertext, int length, 
+                 const uint8_t *key, int key_len, const uint8_t *iv) {
+    uint8_t feedback[BLOCK_SIZE];
+    uint8_t encrypted_feedback[BLOCK_SIZE];
+    
+    // Initialize feedback register with IV
+    memcpy(feedback, iv, BLOCK_SIZE);
+    
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        // Encrypt the feedback register
+        block_encrypt(feedback, encrypted_feedback, key, key_len);
+        
+        // XOR with plaintext to produce ciphertext
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            ciphertext[i * BLOCK_SIZE + j] = plaintext[i * BLOCK_SIZE + j] ^ encrypted_feedback[j];
+        }
+        
+        // Update feedback register with ciphertext (for CFB mode)
+        memcpy(feedback, ciphertext + i * BLOCK_SIZE, BLOCK_SIZE);
+    }
+}
+
+void cfb_decrypt(const uint8_t *ciphertext, uint8_t *plaintext, int length, 
+                 const uint8_t *key, int key_len, const uint8_t *iv) {
+    uint8_t feedback[BLOCK_SIZE];
+    uint8_t encrypted_feedback[BLOCK_SIZE];
+    
+    // Initialize feedback register with IV
+    memcpy(feedback, iv, BLOCK_SIZE);
+    
+    int blocks = length / BLOCK_SIZE;
+    
+    for (int i = 0; i < blocks; i++) {
+        // Encrypt the feedback register
+        block_encrypt(feedback, encrypted_feedback, key, key_len);
+        
+        // XOR with ciphertext to produce plaintext
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            plaintext[i * BLOCK_SIZE + j] = ciphertext[i * BLOCK_SIZE + j] ^ encrypted_feedback[j];
+        }
+        
+        // Update feedback register with ciphertext
+        memcpy(feedback, ciphertext + i * BLOCK_SIZE, BLOCK_SIZE);
+    }
+}
+
+// Demo function
+void demo_mode(const char *mode_name, 
+               void (*encrypt_func)(const uint8_t*, uint8_t*, int, const uint8_t*, int, const uint8_t*),
+               void (*decrypt_func)(const uint8_t*, uint8_t*, int, const uint8_t*, int, const uint8_t*),
+               const uint8_t *iv) {
+    printf("\n=== %s Mode ===\n", mode_name);
+    
+    uint8_t key[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+    int key_len = sizeof(key);
+    
+    char input_text[] = "Hello World! This is a test of encryption modes.";
+    int text_len = strlen(input_text);
+    
+    // Calculate padded length
+    int padded_len = ((text_len + BLOCK_SIZE) / BLOCK_SIZE) * BLOCK_SIZE;
+    uint8_t *padded_plaintext = malloc(padded_len);
+    uint8_t *ciphertext = malloc(padded_len);
+    uint8_t *decrypted_text = malloc(padded_len);
+    
+    // Copy and pad plaintext
+    memcpy(padded_plaintext, input_text, text_len);
+    int final_len = add_padding(padded_plaintext, text_len, BLOCK_SIZE);
+    
+    printf("Original text: %s\n", input_text);
+    print_hex(padded_plaintext, final_len, "Padded plaintext");
+    
+    // Encrypt
+    if (iv) {
+        encrypt_func(padded_plaintext, ciphertext, final_len, key, key_len, iv);
+    } else {
+        // ECB doesn't use IV
+        ecb_encrypt(padded_plaintext, ciphertext, final_len, key, key_len);
+    }
+    print_hex(ciphertext, final_len, "Ciphertext     ");
+    
+    // Decrypt
+    if (iv) {
+        decrypt_func(ciphertext, decrypted_text, final_len, key, key_len, iv);
+    } else {
+        ecb_decrypt(ciphertext, decrypted_text, final_len, key, key_len);
+    }
+    
+    // Remove padding
+    int decrypted_len = remove_padding(decrypted_text, final_len);
+    decrypted_text[decrypted_len] = '\0';
+    
+    print_text(decrypted_text, decrypted_len, "Decrypted text");
+    printf("Success: %s\n", strcmp(input_text, (char*)decrypted_text) == 0 ? "Yes" : "No");
+    
+    free(padded_plaintext);
+    free(ciphertext);
+    free(decrypted_text);
+}
+
+int main() {
+    printf("=== Cryptography Modes of Operation Demo ===\n");
+    printf("Block Size: %d bytes\n", BLOCK_SIZE);
+    
+    // IV for CBC and CFB modes
+    uint8_t iv[BLOCK_SIZE] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0};
+    print_hex(iv, BLOCK_SIZE, "IV used for CBC/CFB");
+    
+    // Demo each mode
+    demo_mode("ECB", NULL, NULL, NULL);  // ECB doesn't use IV
+    
+    demo_mode("CBC", cbc_encrypt, cbc_decrypt, iv);
+    
+    demo_mode("CFB", cfb_encrypt, cfb_decrypt, iv);
+    
+    // Show difference between modes with identical blocks
+    printf("\n=== Mode Comparison (Identical Blocks) ===\n");
+    
+    uint8_t test_key[] = {0x01, 0x02, 0x03, 0x04};
+    uint8_t test_data[BLOCK_SIZE * 3];
+    uint8_t ecb_result[BLOCK_SIZE * 3];
+    uint8_t cbc_result[BLOCK_SIZE * 3];
+    uint8_t cfb_result[BLOCK_SIZE * 3];
+    
+    // Create data with identical blocks
+    for (int i = 0; i < 3; i++) {
+        memcpy(test_data + i * BLOCK_SIZE, "AAAAAAA", BLOCK_SIZE);
+    }
+    
+    printf("Test data (3 identical blocks):\n");
+    print_hex(test_data, BLOCK_SIZE * 3, "Plaintext");
+    
+    // Encrypt with different modes
+    ecb_encrypt(test_data, ecb_result, BLOCK_SIZE * 3, test_key, sizeof(test_key));
+    cbc_encrypt(test_data, cbc_result, BLOCK_SIZE * 3, test_key, sizeof(test_key), iv);
+    cfb_encrypt(test_data, cfb_result, BLOCK_SIZE * 3, test_key, sizeof(test_key), iv);
+    
+    print_hex(ecb_result, BLOCK_SIZE * 3, "ECB result ");
+    print_hex(cbc_result, BLOCK_SIZE * 3, "CBC result ");
+    print_hex(cfb_result, BLOCK_SIZE * 3, "CFB result ");
+    
+    printf("\nNote: ECB shows patterns, CBC/CFB provide better security!\n");
+    
+    return 0;
+}
