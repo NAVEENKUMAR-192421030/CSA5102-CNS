@@ -1,0 +1,409 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <math.h>
+
+#define MAX_TEXT_LENGTH 1000
+#define ALPHABET_SIZE 26
+
+
+const double english_freq[ALPHABET_SIZE] = {
+    8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015, 6.094, 6.966, 0.153,
+    0.772, 4.025, 2.406, 6.749, 7.507, 1.929, 0.095, 5.987, 6.327, 9.056,
+    2.758, 0.978, 2.360, 0.150, 1.974, 0.074
+};
+
+
+typedef struct {
+    char letter;
+    int count;
+    double frequency;
+} LetterFrequency;
+
+// Function prototypes
+void calculateFrequency(const char *text, LetterFrequency freq[]);
+void sortByFrequency(LetterFrequency freq[]);
+double calculateChiSquared(const LetterFrequency text_freq[]);
+void generatePossibleKey(const LetterFrequency text_freq[], char *key);
+void decryptWithKey(const char *ciphertext, const char *key, char *plaintext);
+void printFrequencyTable(const LetterFrequency freq[]);
+void bruteForceAttack(const char *ciphertext, int top_n);
+void interactiveAttack(const char *ciphertext);
+
+int main() {
+    char ciphertext[MAX_TEXT_LENGTH];
+    int choice;
+    
+    printf("=== LETTER FREQUENCY ATTACK TOOL ===\n\n");
+    
+    printf("English Letter Frequencies:\n");
+    printf("E(12.7%%) T(9.1%) A(8.2%) O(7.5%) I(7.0%) N(6.7%) S(6.3%) H(6.1%) R(6.0%)\n");
+    printf("D(4.3%) L(4.0%) C(2.8%) U(2.8%) M(2.4%) W(2.4%) F(2.2%) G(2.0%) Y(2.0%)\n");
+    printf("P(1.9%) B(1.5%) V(1.0%) K(0.8%) J(0.15%) X(0.15%) Q(0.10%) Z(0.07%)\n\n");
+    
+    while(1) {
+        printf("\nMenu:\n");
+        printf("1. Analyze ciphertext frequency\n");
+        printf("2. Automatic frequency attack\n");
+        printf("3. Interactive frequency attack\n");
+        printf("4. Brute force top N possibilities\n");
+        printf("5. Exit\n");
+        printf("Enter your choice: ");
+        
+        scanf("%d", &choice);
+        getchar(); // Clear newline
+        
+        switch(choice) {
+            case 1: {
+                printf("\nEnter ciphertext: ");
+                fgets(ciphertext, sizeof(ciphertext), stdin);
+                ciphertext[strcspn(ciphertext, "\n")] = 0;
+                
+                // Convert to uppercase for analysis
+                for(int i = 0; ciphertext[i]; i++) {
+                    ciphertext[i] = toupper(ciphertext[i]);
+                }
+                
+                LetterFrequency freq[ALPHABET_SIZE];
+                calculateFrequency(ciphertext, freq);
+                printFrequencyTable(freq);
+                break;
+            }
+            
+            case 2: {
+                printf("\n=== AUTOMATIC FREQUENCY ATTACK ===\n");
+                printf("Enter ciphertext: ");
+                fgets(ciphertext, sizeof(ciphertext), stdin);
+                ciphertext[strcspn(ciphertext, "\n")] = 0;
+                
+                // Convert to uppercase
+                for(int i = 0; ciphertext[i]; i++) {
+                    ciphertext[i] = toupper(ciphertext[i]);
+                }
+                
+                LetterFrequency freq[ALPHABET_SIZE];
+                calculateFrequency(ciphertext, freq);
+                sortByFrequency(freq);
+                
+                char key[ALPHABET_SIZE + 1];
+                char plaintext[MAX_TEXT_LENGTH];
+                
+                generatePossibleKey(freq, key);
+                decryptWithKey(ciphertext, key, plaintext);
+                
+                printf("\nMost likely decryption:\n");
+                printf("Generated Key: %s\n", key);
+                printf("Decrypted Text: %s\n", plaintext);
+                printf("Chi-squared score: %.4f\n", calculateChiSquared(freq));
+                break;
+            }
+            
+            case 3: {
+                printf("\nEnter ciphertext: ");
+                fgets(ciphertext, sizeof(ciphertext), stdin);
+                ciphertext[strcspn(ciphertext, "\n")] = 0;
+                
+                for(int i = 0; ciphertext[i]; i++) {
+                    ciphertext[i] = toupper(ciphertext[i]);
+                }
+                
+                interactiveAttack(ciphertext);
+                break;
+            }
+            
+            case 4: {
+                printf("\nEnter ciphertext: ");
+                fgets(ciphertext, sizeof(ciphertext), stdin);
+                ciphertext[strcspn(ciphertext, "\n")] = 0;
+                
+                for(int i = 0; ciphertext[i]; i++) {
+                    ciphertext[i] = toupper(ciphertext[i]);
+                }
+                
+                int top_n;
+                printf("Enter number of top possibilities to show: ");
+                scanf("%d", &top_n);
+                getchar();
+                
+                bruteForceAttack(ciphertext, top_n);
+                break;
+            }
+            
+            case 5:
+                printf("Exiting...\n");
+                return 0;
+                
+            default:
+                printf("Invalid choice! Please try again.\n");
+        }
+    }
+    
+    return 0;
+}
+
+// Calculate letter frequency in the text
+void calculateFrequency(const char *text, LetterFrequency freq[]) {
+    int total_letters = 0;
+    
+    // Initialize frequency array
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        freq[i].letter = 'A' + i;
+        freq[i].count = 0;
+        freq[i].frequency = 0.0;
+    }
+    
+    // Count letters
+    for(int i = 0; text[i] != '\0'; i++) {
+        if(isalpha(text[i])) {
+            int index = text[i] - 'A';
+            freq[index].count++;
+            total_letters++;
+        }
+    }
+    
+    // Calculate frequencies
+    if(total_letters > 0) {
+        for(int i = 0; i < ALPHABET_SIZE; i++) {
+            freq[i].frequency = (freq[i].count * 100.0) / total_letters;
+        }
+    }
+}
+
+// Sort frequency array by frequency (descending)
+void sortByFrequency(LetterFrequency freq[]) {
+    for(int i = 0; i < ALPHABET_SIZE - 1; i++) {
+        for(int j = i + 1; j < ALPHABET_SIZE; j++) {
+            if(freq[j].frequency > freq[i].frequency) {
+                LetterFrequency temp = freq[i];
+                freq[i] = freq[j];
+                freq[j] = temp;
+            }
+        }
+    }
+}
+
+// Calculate chi-squared statistic for goodness of fit
+double calculateChiSquared(const LetterFrequency text_freq[]) {
+    double chi_squared = 0.0;
+    int total_letters = 0;
+    
+    // Calculate total letters
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        total_letters += text_freq[i].count;
+    }
+    
+    if(total_letters == 0) return 999999.0;
+    
+    // Calculate chi-squared
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        double expected = english_freq[i] * total_letters / 100.0;
+        double observed = text_freq[i].count;
+        if(expected > 0) {
+            chi_squared += ((observed - expected) * (observed - expected)) / expected;
+        }
+    }
+    
+    return chi_squared;
+}
+
+// Generate possible substitution key based on frequency analysis
+void generatePossibleKey(const LetterFrequency text_freq[], char *key) {
+    // Most common English letters in order
+    const char *common_english = "ETAOINSHRDLCUMWFGYPBVKJXQZ";
+    
+    // Create mapping from ciphertext letters to likely plaintext letters
+    char mapping[ALPHABET_SIZE];
+    
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        if(i < strlen(common_english)) {
+            mapping[text_freq[i].letter - 'A'] = common_english[i];
+        } else {
+            mapping[text_freq[i].letter - 'A'] = '?';
+        }
+    }
+    
+    // Build the key
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        key[i] = mapping[i];
+    }
+    key[ALPHABET_SIZE] = '\0';
+}
+
+// Decrypt ciphertext using a given key
+void decryptWithKey(const char *ciphertext, const char *key, char *plaintext) {
+    for(int i = 0; ciphertext[i] != '\0'; i++) {
+        if(isalpha(ciphertext[i])) {
+            int index = ciphertext[i] - 'A';
+            plaintext[i] = key[index];
+        } else {
+            plaintext[i] = ciphertext[i];
+        }
+    }
+    plaintext[strlen(ciphertext)] = '\0';
+}
+
+// Print frequency table
+void printFrequencyTable(const LetterFrequency freq[]) {
+    LetterFrequency temp[ALPHABET_SIZE];
+    memcpy(temp, freq, sizeof(temp));
+    sortByFrequency(temp);
+    
+    printf("\nLetter Frequency Analysis:\n");
+    printf("+-------+-------+----------+------------+\n");
+    printf("| Letter| Count | Frequency| English %%  |\n");
+    printf("+-------+-------+----------+------------+\n");
+    
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        if(temp[i].count > 0) {
+            printf("|   %c   |  %3d  |  %6.2f%% |   %6.2f%%   |\n",
+                   temp[i].letter, temp[i].count, temp[i].frequency, 
+                   english_freq[temp[i].letter - 'A']);
+        }
+    }
+    printf("+-------+-------+----------+------------+\n");
+    
+    // Show top 10 most frequent letters
+    printf("\nTop 10 most frequent letters in ciphertext:\n");
+    for(int i = 0; i < 10 && i < ALPHABET_SIZE; i++) {
+        if(temp[i].count > 0) {
+            printf("%c (%.2f%%) ", temp[i].letter, temp[i].frequency);
+        }
+    }
+    printf("\n");
+}
+
+// Interactive frequency attack
+void interactiveAttack(const char *ciphertext) {
+    char current_key[ALPHABET_SIZE + 1] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    char plaintext[MAX_TEXT_LENGTH];
+    char input[10];
+    
+    printf("\n=== INTERACTIVE FREQUENCY ATTACK ===\n");
+    printf("Commands: swap X Y, reset, show, quit\n");
+    printf("Example: 'swap A B' swaps A and B in the key\n\n");
+    
+    while(1) {
+        decryptWithKey(ciphertext, current_key, plaintext);
+        printf("\nCurrent Key: %s\n", current_key);
+        printf("Decrypted: %s\n", plaintext);
+        printf("\nEnter command: ");
+        
+        fgets(input, sizeof(input), stdin);
+        input[strcspn(input, "\n")] = 0;
+        
+        if(strncmp(input, "swap", 4) == 0) {
+            char from, to;
+            if(sscanf(input, "swap %c %c", &from, &to) == 2) {
+                from = toupper(from);
+                to = toupper(to);
+                
+                // Find positions and swap
+                char *pos1 = strchr(current_key, from);
+                char *pos2 = strchr(current_key, to);
+                
+                if(pos1 && pos2) {
+                    *pos1 = to;
+                    *pos2 = from;
+                    printf("Swapped %c and %c\n", from, to);
+                } else {
+                    printf("Invalid letters!\n");
+                }
+            } else {
+                printf("Usage: swap X Y\n");
+            }
+        } else if(strcmp(input, "reset") == 0) {
+            strcpy(current_key, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+            printf("Key reset to identity\n");
+        } else if(strcmp(input, "show") == 0) {
+            // Show current mapping
+            printf("Current mapping:\n");
+            for(int i = 0; i < ALPHABET_SIZE; i++) {
+                printf("%c->%c ", 'A' + i, current_key[i]);
+                if((i + 1) % 8 == 0) printf("\n");
+            }
+            printf("\n");
+        } else if(strcmp(input, "quit") == 0) {
+            break;
+        } else {
+            printf("Unknown command!\n");
+        }
+    }
+}
+
+// Brute force top N possibilities
+void bruteForceAttack(const char *ciphertext, int top_n) {
+    printf("\n=== BRUTE FORCE TOP %d POSSIBILITIES ===\n", top_n);
+    
+    LetterFrequency freq[ALPHABET_SIZE];
+    calculateFrequency(ciphertext, freq);
+    
+    // Store possible decryptions with their scores
+    typedef struct {
+        char key[ALPHABET_SIZE + 1];
+        char plaintext[MAX_TEXT_LENGTH];
+        double score;
+    } Possibility;
+    
+    Possibility possibilities[100]; // Store up to 100 possibilities
+    int count = 0;
+    
+    // Common letter mappings to try
+    char common_patterns[][ALPHABET_SIZE + 1] = {
+        "ETAOINSHRDLCUMWFGYPBVKJXQZ", // Standard frequency order
+        "EATOINSHRDLCUMWFGYPBVKJXQZ", // E A T O I order
+        "ETAOINRSHDLCUMWFGYPBVKJXQZ", // E T A O I N R order
+        "THEANDOFSRIWMCUYGPBLVKXQJZ", // Common word starters
+        "ETAOINSHRDLUCMWFGYPBVKJXQZ", // Slight variation
+    };
+    
+    int num_patterns = sizeof(common_patterns) / sizeof(common_patterns[0]);
+    
+    for(int p = 0; p < num_patterns && count < top_n; p++) {
+        char test_key[ALPHABET_SIZE + 1];
+        char test_plaintext[MAX_TEXT_LENGTH];
+        
+        // Generate key based on pattern
+        sortByFrequency(freq);
+        for(int i = 0; i < ALPHABET_SIZE; i++) {
+            if(i < strlen(common_patterns[p])) {
+                test_key[freq[i].letter - 'A'] = common_patterns[p][i];
+            } else {
+                test_key[freq[i].letter - 'A'] = 'A' + i;
+            }
+        }
+        test_key[ALPHABET_SIZE] = '\0';
+        
+        decryptWithKey(ciphertext, test_key, test_plaintext);
+        
+        // Calculate score (lower chi-squared is better)
+        LetterFrequency test_freq[ALPHABET_SIZE];
+        calculateFrequency(test_plaintext, test_freq);
+        double score = calculateChiSquared(test_freq);
+        
+        // Store possibility
+        strcpy(possibilities[count].key, test_key);
+        strcpy(possibilities[count].plaintext, test_plaintext);
+        possibilities[count].score = score;
+        count++;
+    }
+    
+    // Sort by score (lower is better)
+    for(int i = 0; i < count - 1; i++) {
+        for(int j = i + 1; j < count; j++) {
+            if(possibilities[j].score < possibilities[i].score) {
+                Possibility temp = possibilities[i];
+                possibilities[i] = possibilities[j];
+                possibilities[j] = temp;
+            }
+        }
+    }
+    
+    // Display results
+    printf("\nTop %d most likely decryptions:\n", top_n);
+    for(int i = 0; i < count && i < top_n; i++) {
+        printf("\n%d. Score: %.4f\n", i + 1, possibilities[i].score);
+        printf("   Key: %s\n", possibilities[i].key);
+        printf("   Text: %s\n", possibilities[i].plaintext);
+    }
+}
