@@ -1,0 +1,259 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define BLOCK_SIZE 8  
+#define KEY_SIZE 16   
+
+
+
+void simple_encrypt(const uint8_t *input, const uint8_t *key, uint8_t *output, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        output[i] = input[i] ^ key[i % KEY_SIZE];
+        
+        output[i] = (output[i] << 2) | (output[i] >> 6);
+    }
+}
+
+
+void simple_decrypt(const uint8_t *input, const uint8_t *key, uint8_t *output, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        uint8_t temp = input[i];
+        // Reverse the transformation
+        temp = (temp >> 2) | (temp << 6);
+        output[i] = temp ^ key[i % KEY_SIZE];
+    }
+}
+
+// ECB Mode Encryption
+void ecb_encrypt(const uint8_t *plaintext, size_t plaintext_len,
+                const uint8_t *key, uint8_t *ciphertext) {
+    for (size_t i = 0; i < plaintext_len; i += BLOCK_SIZE) {
+        size_t block_len = (plaintext_len - i < BLOCK_SIZE) ? plaintext_len - i : BLOCK_SIZE;
+        simple_encrypt(plaintext + i, key, ciphertext + i, block_len);
+    }
+}
+
+// ECB Mode Decryption
+void ecb_decrypt(const uint8_t *ciphertext, size_t ciphertext_len,
+                const uint8_t *key, uint8_t *plaintext) {
+    for (size_t i = 0; i < ciphertext_len; i += BLOCK_SIZE) {
+        size_t block_len = (ciphertext_len - i < BLOCK_SIZE) ? ciphertext_len - i : BLOCK_SIZE;
+        simple_decrypt(ciphertext + i, key, plaintext + i, block_len);
+    }
+}
+
+// Introduce errors in specific blocks
+void introduce_errors(uint8_t *ciphertext, size_t ciphertext_len, int error_block, int error_bit) {
+    if (error_block * BLOCK_SIZE < ciphertext_len) {
+        int position = error_block * BLOCK_SIZE + (error_bit / 8);
+        if (position < ciphertext_len) {
+            printf("Introducing error: Flipping bit %d in block %d (byte position %d)\n", 
+                   error_bit % 8, error_block, position);
+            ciphertext[position] ^= (1 << (error_bit % 8));  // Flip one bit
+        }
+    }
+}
+
+// Print data in block format
+void print_blocks(const char *label, const uint8_t *data, size_t len) {
+    printf("%s:\n", label);
+    for (size_t i = 0; i < len; i += BLOCK_SIZE) {
+        size_t block_len = (len - i < BLOCK_SIZE) ? len - i : BLOCK_SIZE;
+        printf("  Block %2zu: ", i / BLOCK_SIZE);
+        for (size_t j = 0; j < block_len; j++) {
+            printf("%02X", data[i + j]);
+        }
+        // Pad for alignment
+        for (size_t j = block_len; j < BLOCK_SIZE; j++) {
+            printf("  ");
+        }
+        printf("  |  ");
+        for (size_t j = 0; j < block_len; j++) {
+            if (data[i + j] >= 32 && data[i + j] <= 126) {
+                printf("%c", data[i + j]);
+            } else {
+                printf(".");
+            }
+        }
+        printf("\n");
+    }
+}
+
+// Compare and show differences
+void compare_blocks(const uint8_t *original, const uint8_t *decrypted, size_t len) {
+    printf("\nBlock-by-block comparison:\n");
+    int error_count = 0;
+    
+    for (size_t i = 0; i < len; i += BLOCK_SIZE) {
+        size_t block_len = (len - i < BLOCK_SIZE) ? len - i : BLOCK_SIZE;
+        int block_has_error = 0;
+        
+        for (size_t j = 0; j < block_len; j++) {
+            if (original[i + j] != decrypted[i + j]) {
+                block_has_error = 1;
+                error_count++;
+                break;
+            }
+        }
+        
+        printf("  Block %2zu: ", i / BLOCK_SIZE);
+        if (block_has_error) {
+            printf("❌ CORRUPTED");
+            printf("  [Original: ");
+            for (size_t j = 0; j < block_len; j++) {
+                if (original[i + j] >= 32 && original[i + j] <= 126) {
+                    printf("%c", original[i + j]);
+                } else {
+                    printf(".");
+                }
+            }
+            printf("]  [Decrypted: ");
+            for (size_t j = 0; j < block_len; j++) {
+                if (decrypted[i + j] >= 32 && decrypted[i + j] <= 126) {
+                    printf("%c", decrypted[i + j]);
+                } else {
+                    printf(".");
+                }
+            }
+            printf("]");
+        } else {
+            printf("✅ OK");
+        }
+        printf("\n");
+    }
+    
+    printf("\nTotal corrupted blocks: %d\n", error_count);
+}
+
+int main() {
+    printf("=== ECB Mode: Error Propagation Demonstration ===\n\n");
+    
+    // Example data with repeating patterns (shows ECB weakness)
+    uint8_t plaintext[] = "AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEEFFFF";
+    size_t plaintext_len = strlen((char*)plaintext);
+    
+    uint8_t key[KEY_SIZE] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+                            0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
+    
+    // Allocate buffers
+    uint8_t *ciphertext = malloc(plaintext_len);
+    uint8_t *decrypted_text = malloc(plaintext_len);
+    uint8_t *corrupted_ciphertext = malloc(plaintext_len);
+    
+    if (!ciphertext || !decrypted_text || !corrupted_ciphertext) {
+        printf("Memory allocation failed!\n");
+        return 1;
+    }
+    
+    printf("DEMO 1: ECB Mode Basics - Pattern Preservation\n");
+    printf("==============================================\n");
+    
+    // Show original plaintext with repeating patterns
+    print_blocks("Original Plaintext", plaintext, plaintext_len);
+    
+    // ECB Encryption
+    ecb_encrypt(plaintext, plaintext_len, key, ciphertext);
+    print_blocks("ECB Ciphertext", ciphertext, plaintext_len);
+    
+    // ECB Decryption (no errors)
+    ecb_decrypt(ciphertext, plaintext_len, key, decrypted_text);
+    print_blocks("Decrypted Text", decrypted_text, plaintext_len);
+    
+    printf("\nNote: Identical plaintext blocks produce identical ciphertext blocks!\n");
+    
+    printf("\n\nDEMO 2: Single Bit Error Propagation\n");
+    printf("====================================\n");
+    
+    // Copy original ciphertext
+    memcpy(corrupted_ciphertext, ciphertext, plaintext_len);
+    
+    // Introduce single bit error in block 2
+    int error_block = 2;
+    int error_bit = 15;  // Flip bit 15 (2nd byte, 7th bit)
+    introduce_errors(corrupted_ciphertext, plaintext_len, error_block, error_bit);
+    
+    print_blocks("Corrupted Ciphertext", corrupted_ciphertext, plaintext_len);
+    
+    // Decrypt corrupted ciphertext
+    ecb_decrypt(corrupted_ciphertext, plaintext_len, key, decrypted_text);
+    print_blocks("Decrypted from Corrupted", decrypted_text, plaintext_len);
+    
+    // Compare with original
+    compare_blocks(plaintext, decrypted_text, plaintext_len);
+    
+    printf("\n\nDEMO 3: Multiple Errors in Different Blocks\n");
+    printf("===========================================\n");
+    
+    // Reset and introduce multiple errors
+    memcpy(corrupted_ciphertext, ciphertext, plaintext_len);
+    
+    // Introduce errors in blocks 1 and 4
+    introduce_errors(corrupted_ciphertext, plaintext_len, 1, 7);   // Block 1, bit 7
+    introduce_errors(corrupted_ciphertext, plaintext_len, 4, 23);  // Block 4, bit 23
+    
+    print_blocks("Multi-error Ciphertext", corrupted_ciphertext, plaintext_len);
+    
+    // Decrypt
+    ecb_decrypt(corrupted_ciphertext, plaintext_len, key, decrypted_text);
+    print_blocks("Decrypted from Multi-error", decrypted_text, plaintext_len);
+    
+    compare_blocks(plaintext, decrypted_text, plaintext_len);
+    
+    printf("\n\nDEMO 4: Complete Block Corruption\n");
+    printf("=================================\n");
+    
+    // Corrupt entire block 3
+    memcpy(corrupted_ciphertext, ciphertext, plaintext_len);
+    
+    printf("Corrupting entire block 3\n");
+    for (int i = 0; i < BLOCK_SIZE && (3 * BLOCK_SIZE + i) < plaintext_len; i++) {
+        corrupted_ciphertext[3 * BLOCK_SIZE + i] = 0xFF;  // Set all bits to 1
+    }
+    
+    print_blocks("Block-corrupted Ciphertext", corrupted_ciphertext, plaintext_len);
+    
+    // Decrypt
+    ecb_decrypt(corrupted_ciphertext, plaintext_len, key, decrypted_text);
+    print_blocks("Decrypted from Block-corrupted", decrypted_text, plaintext_len);
+    
+    compare_blocks(plaintext, decrypted_text, plaintext_len);
+    
+    printf("\n\nDEMO 5: Error in Last Block (Partial)\n");
+    printf("=====================================\n");
+    
+    // Test with message that's not multiple of block size
+    uint8_t short_text[] = "Short message!";
+    size_t short_len = strlen((char*)short_text);
+    uint8_t short_ciphertext[short_len];
+    uint8_t short_corrupted[short_len];
+    uint8_t short_decrypted[short_len];
+    
+    ecb_encrypt(short_text, short_len, key, short_ciphertext);
+    memcpy(short_corrupted, short_ciphertext, short_len);
+    
+    // Introduce error in last (partial) block
+    introduce_errors(short_corrupted, short_len, 1, 5);  // Last block (block 1), bit 5
+    
+    print_blocks("Short Plaintext", short_text, short_len);
+    print_blocks("Corrupted Short Ciphertext", short_corrupted, short_len);
+    
+    ecb_decrypt(short_corrupted, short_len, key, short_decrypted);
+    print_blocks("Decrypted Short Text", short_decrypted, short_len);
+    
+    printf("\n=== ECB Mode Error Analysis ===\n");
+    printf("✓ Errors affect ONLY the corrupted block\n");
+    printf("✓ No error propagation to other blocks\n");
+    printf("✓ Each block decrypts independently\n");
+    printf("✓ Advantage: Localized damage\n");
+    printf("✓ Disadvantage: No error detection across blocks\n");
+    printf("⚠️  Security Warning: ECB reveals patterns in plaintext!\n");
+    
+    // Clean up
+    free(ciphertext);
+    free(decrypted_text);
+    free(corrupted_ciphertext);
+    
+    return 0;
+}
