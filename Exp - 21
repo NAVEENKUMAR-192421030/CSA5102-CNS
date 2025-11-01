@@ -1,0 +1,303 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdint.h>
+
+
+typedef struct {
+    const char *date;
+    const char *location;
+    const char *event;
+    const char *message;
+} PT109Event;
+
+
+PT109Event pt109_events[] = {
+    {"1943-08-01", "Blackett Strait", "Rammed by Japanese destroyer Amagiri", "PT-109 HIT. SINKING. REQUEST IMMEDIATE ASSISTANCE."},
+    {"1943-08-02", "Blackett Strait", "Survivors on Plum Pudding Island", "11 SURVIVORS. NEED WATER AND MEDICAL AID."},
+    {"1943-08-03", "Olasana Island", "Moved to larger island", "MOVED TO OLASANA. HAVE SOME COCONUTS. STILL NEED HELP."},
+    {"1943-08-04", "Naru Island", "Kennedy finds food and small boat", "FOUND JAPANESE OUTPOST. HAVE SMALL BOAT. CONTINUING SEARCH."},
+    {"1943-08-05", "Ferguson Passage", "Attempt to signal passing PT boats", "ATTEMPTED SIGNAL PASSING PT BOATS. NO SUCCESS."},
+    {"1943-08-06", "Olasana Island", "Natives discovered by Kennedy", "MET NATIVES. GAVE MESSAGE FOR RESCUE."},
+    {"1943-08-07", "Rendova Base", "Rescue party dispatched", "RESCUE TEAM DISPATCHED. ALL SURVIVORS ACCOUNTED FOR."},
+    {"1943-08-08", "Blackett Strait", "Successful rescue operation", "ALL 11 CREW RESCUED. MISSION ACCOMPLISHED."}
+};
+
+#define NUM_EVENTS 8
+
+// Simple substitution cipher (similar to what might have been used)
+void substitution_encrypt(const char *plaintext, char *ciphertext, const char *key) {
+    const char *alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (int i = 0; plaintext[i] != '\0'; i++) {
+        if (isalpha(plaintext[i])) {
+            char upper_char = toupper(plaintext[i]);
+            const char *pos = strchr(alphabet, upper_char);
+            if (pos) {
+                int index = pos - alphabet;
+                ciphertext[i] = key[index];
+            } else {
+                ciphertext[i] = plaintext[i];
+            }
+        } else {
+            ciphertext[i] = plaintext[i];
+        }
+    }
+    ciphertext[strlen(plaintext)] = '\0';
+}
+
+void substitution_decrypt(const char *ciphertext, char *plaintext, const char *key) {
+    const char *alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (int i = 0; ciphertext[i] != '\0'; i++) {
+        if (isalpha(ciphertext[i])) {
+            char upper_char = toupper(ciphertext[i]);
+            const char *pos = strchr(key, upper_char);
+            if (pos) {
+                int index = pos - key;
+                plaintext[i] = alphabet[index];
+            } else {
+                plaintext[i] = ciphertext[i];
+            }
+        } else {
+            plaintext[i] = ciphertext[i];
+        }
+    }
+    plaintext[strlen(ciphertext)] = '\0';
+}
+
+// Caesar cipher (simple field cipher)
+void caesar_encrypt(const char *plaintext, char *ciphertext, int shift) {
+    for (int i = 0; plaintext[i] != '\0'; i++) {
+        if (isalpha(plaintext[i])) {
+            char base = isupper(plaintext[i]) ? 'A' : 'a';
+            ciphertext[i] = (plaintext[i] - base + shift) % 26 + base;
+        } else {
+            ciphertext[i] = plaintext[i];
+        }
+    }
+    ciphertext[strlen(plaintext)] = '\0';
+}
+
+void caesar_decrypt(const char *ciphertext, char *plaintext, int shift) {
+    caesar_encrypt(ciphertext, plaintext, 26 - (shift % 26));
+}
+
+// Naval code book simulation (simplified)
+typedef struct {
+    const char *code;
+    const char *meaning;
+} NavalCode;
+
+NavalCode naval_codes[] = {
+    {"ZPQ", "ENEMY SHIP SIGHTED"},
+    {"XRB", "REQUEST IMMEDIATE ASSISTANCE"},
+    {"KLT", "SENDING DISTRESS SIGNAL"},
+    {"MNP", "FUEL LOW"},
+    {"QRS", "AMMO DEPLETED"},
+    {"TUV", "MEDICAL EMERGENCY"},
+    {"WXY", "NAVIGATION PROBLEMS"},
+    {"BCD", "WEATHER DETERIORATING"},
+    {"FGH", "RENDEZVOUS POINT"},
+    {"IJK", "MISSION ACCOMPLISHED"},
+    {"LMN", "RETURNING TO BASE"},
+    {"OPQ", "AWAITING ORDERS"},
+    {"RST", "ENGINE TROUBLE"},
+    {"UVW", "RADIO DAMAGED"},
+    {"YZA", "CREW INJURED"},
+    {"CDE", "SUSPECT ENEMY PATROL"},
+    {"FGH", "SPOTTED AIRCRAFT"},
+    {"HIJ", "UNDER ATTACK"}
+};
+
+#define NUM_CODES 18
+
+// Find meaning for a naval code
+const char* decode_naval_message(const char *code) {
+    for (int i = 0; i < NUM_CODES; i++) {
+        if (strcmp(naval_codes[i].code, code) == 0) {
+            return naval_codes[i].meaning;
+        }
+    }
+    return "UNKNOWN CODE";
+}
+
+// Print the PT-109 timeline
+void print_timeline() {
+    printf("PT-109 INCIDENT TIMELINE (August 1-8, 1943)\n");
+    printf("============================================\n");
+    for (int i = 0; i < NUM_EVENTS; i++) {
+        printf("\nDay %d: %s\n", i + 1, pt109_events[i].date);
+        printf("Location: %s\n", pt109_events[i].location);
+        printf("Event: %s\n", pt109_events[i].event);
+        printf("Message: %s\n", pt109_events[i].message);
+    }
+    printf("\n");
+}
+
+// Simulate radio transmission with noise/interference
+void simulate_radio_transmission(const char *message, int success_rate) {
+    printf("Radio Transmission Simulation:\n");
+    printf("Sending: %s\n", message);
+    printf("Transmission: ");
+    
+    for (int i = 0; message[i] != '\0'; i++) {
+        if (rand() % 100 < success_rate) {
+            printf("%c", message[i]);
+        } else {
+            // Simulate static/interference
+            printf("%c", "?*!@#~"[rand() % 6]);
+        }
+    }
+    printf("\n\n");
+}
+
+int main() {
+    printf("=== PT-109 PATROL BOAT CRYPTOGRAPHY SCENARIO ===\n\n");
+    printf("Historical Context: PT-109, commanded by Lieutenant John F. Kennedy,\n");
+    printf("was rammed by Japanese destroyer Amagiri on August 1, 1943.\n");
+    printf("This program simulates communication and cryptography methods\n");
+    printf("that might have been used during the survival and rescue operations.\n\n");
+    
+    srand(42); // Fixed seed for reproducible results
+    
+    printf("PART 1: Historical Timeline\n");
+    printf("===========================\n");
+    print_timeline();
+    
+    printf("PART 2: Cryptographic Methods Available in 1943\n");
+    printf("===============================================\n");
+    
+    // Substitution Cipher Example
+    printf("1. SUBSTITUTION CIPHER\n");
+    const char *sub_key = "ZYXWVUTSRQPONMLKJIHGFEDCBA"; // Reverse alphabet
+    char original_msg[] = "SOS NEED RESCUE PT109 SURVIVORS";
+    char encrypted_msg[100];
+    char decrypted_msg[100];
+    
+    printf("Original: %s\n", original_msg);
+    substitution_encrypt(original_msg, encrypted_msg, sub_key);
+    printf("Encrypted: %s\n", encrypted_msg);
+    substitution_decrypt(encrypted_msg, decrypted_msg, sub_key);
+    printf("Decrypted: %s\n\n", decrypted_msg);
+    
+    // Caesar Cipher Example
+    printf("2. CAESAR CIPHER (Shift 3)\n");
+    char caesar_enc[100];
+    char caesar_dec[100];
+    printf("Original: %s\n", original_msg);
+    caesar_encrypt(original_msg, caesar_enc, 3);
+    printf("Encrypted: %s\n", caesar_enc);
+    caesar_decrypt(caesar_enc, caesar_dec, 3);
+    printf("Decrypted: %s\n\n", caesar_dec);
+    
+    // Naval Code System
+    printf("3. NAVAL CODE BOOK SYSTEM\n");
+    printf("Available Codes:\n");
+    for (int i = 0; i < NUM_CODES; i++) {
+        printf("  %s: %s\n", naval_codes[i].code, naval_codes[i].meaning);
+    }
+    printf("\n");
+    
+    // Simulate coded message
+    printf("Coded Message: XRB KLT TUV\n");
+    printf("Decoded: %s, %s, %s\n", 
+           decode_naval_message("XRB"),
+           decode_naval_message("KLT"), 
+           decode_naval_message("TUV"));
+    printf("\n");
+    
+    printf("PART 3: Communication Challenges\n");
+    printf("================================\n");
+    
+    // Radio transmission simulation
+    simulate_radio_transmission("PT109 HIT. SINKING IN BLACKETT STRAIT. 11 SURVIVORS.", 80);
+    simulate_radio_transmission("NEED IMMEDIATE RESCUE. WATER AND MEDICAL SUPPLIES URGENT.", 60);
+    
+    printf("PART 4: Rescue Coordination Simulation\n");
+    printf("=====================================\n");
+    
+    // Simulate message chain during rescue
+    printf("RESCUE OPERATION MESSAGE FLOW:\n\n");
+    
+    printf("1. Kennedy to Natives (verbal):\n");
+    printf("   \"Where you from? You take us to American base?\"\n\n");
+    
+    printf("2. Natives to Coastwatcher (carved on coconut):\n");
+    char coconut_msg[] = "ELEVEN ALIVE NATIVE KNOWS POSIT";
+    char coconut_enc[100];
+    caesar_encrypt(coconut_msg, coconut_enc, 7);
+    printf("   Original: %s\n", coconut_msg);
+    printf("   Encrypted (for security): %s\n\n", coconut_enc);
+    
+    printf("3. Coastwatcher to Rescue Base (radio):\n");
+    char radio_msg[] = "PT109 SURVIVORS FOUND ON OLASANA ISLAND";
+    printf("   Message: %s\n", radio_msg);
+    simulate_radio_transmission(radio_msg, 70);
+    
+    printf("4. Rescue Base to PT Boats (encrypted):\n");
+    char rescue_order[] = "PROCEED TO FERGUSON PASSAGE RESCUE PT109 CREW";
+    char rescue_enc[100];
+    substitution_encrypt(rescue_order, rescue_enc, sub_key);
+    printf("   Plain: %s\n", rescue_order);
+    printf("   Encrypted: %s\n\n", rescue_enc);
+    
+    printf("PART 5: Cryptographic Analysis\n");
+    printf("===============================\n");
+    
+    printf("Methods Used in PT-109 Scenario:\n");
+    printf("✓ Simple field ciphers (when written messages needed)\n");
+    printf("✓ Naval code books for standard messages\n");
+    printf("✓ Verbal communication with locals\n");
+    printf("✓ Physical messages (coconut carving)\n");
+    printf("✓ Radio communication with error correction\n\n");
+    
+    printf("Security Considerations:\n");
+    printf("• Japanese forces monitoring radio frequencies\n");
+    printf("• Need for quick, simple encryption methods\n");
+    printf("• Reliability over complexity in survival situation\n");
+    printf("• Use of trusted intermediaries (natives, coastwatchers)\n\n");
+    
+    printf("PART 6: Modern Reconstruction\n");
+    printf("=============================\n");
+    
+    // Reconstruct the famous coconut message
+    printf("Historical Coconut Message Reconstruction:\n");
+    char historical_msg[] = "ELEVEN ALIVE NATIVE KNOWS POSIT";
+    char reconstructed[100];
+    
+    printf("Original carved message: %s\n", historical_msg);
+    
+    // Show how it might have been encrypted
+    printf("Possible encryption methods:\n");
+    
+    // Method 1: Simple obfuscation
+    printf("1. Character shift: ");
+    for (int i = 0; historical_msg[i] != '\0'; i++) {
+        if (historical_msg[i] == ' ') {
+            printf(" ");
+        } else {
+            printf("%c", ((historical_msg[i] - 'A' + 1) % 26) + 'A');
+        }
+    }
+    printf("\n");
+    
+    // Method 2: Word reversal
+    printf("2. Word reversal: ");
+    char *words[] = {"ELEVEN", "ALIVE", "NATIVE", "KNOWS", "POSIT"};
+    for (int i = 0; i < 5; i++) {
+        for (int j = strlen(words[i]) - 1; j >= 0; j--) {
+            printf("%c", words[i][j]);
+        }
+        printf(" ");
+    }
+    printf("\n\n");
+    
+    printf("=== CONCLUSION ===\n");
+    printf("The PT-109 incident demonstrates:\n");
+    printf("• Importance of reliable communication in survival situations\n");
+    printf("• Adaptation of cryptographic methods to available resources\n");
+    printf("• Value of human intelligence networks (natives, coastwatchers)\n");
+    printf("• Balance between security and practicality in field operations\n");
+    
+    return 0;
+}
