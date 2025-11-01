@@ -1,0 +1,229 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define MATRIX_SIZE 5
+
+
+void generateAllKeys();
+void generateKeyFromString(char *keyStr, char playfairMatrix[MATRIX_SIZE][MATRIX_SIZE]);
+void printMatrix(char matrix[MATRIX_SIZE][MATRIX_SIZE]);
+int isValidKey(char *key);
+void removeDuplicates(char *str);
+void toUpperCase(char *str);
+void generateRandomKey(char *key);
+
+int main() {
+    int choice;
+    char customKey[26];
+    
+    printf("=== Playfair Cipher Key Generator ===\n\n");
+    
+    while(1) {
+        printf("Choose an option:\n");
+        printf("1. Generate all possible keys (WARNING: Very large output)\n");
+        printf("2. Generate from custom key\n");
+        printf("3. Generate random key\n");
+        printf("4. Exit\n");
+        printf("Enter your choice (1-4): ");
+        
+        scanf("%d", &choice);
+        getchar(); // Clear newline
+        
+        switch(choice) {
+            case 1:
+                printf("\n=== Generating Sample Keys ===\n");
+                printf("Note: Full 25! permutations would be 1.55×10^25 keys!\n");
+                printf("Showing sample patterns instead...\n\n");
+                generateAllKeys();
+                break;
+                
+            case 2:
+                printf("Enter your key (letters only, I and J are combined): ");
+                fgets(customKey, sizeof(customKey), stdin);
+                customKey[strcspn(customKey, "\n")] = 0;
+                
+                if(isValidKey(customKey)) {
+                    char matrix[MATRIX_SIZE][MATRIX_SIZE];
+                    toUpperCase(customKey);
+                    removeDuplicates(customKey);
+                    generateKeyFromString(customKey, matrix);
+                    printf("\nGenerated Playfair Matrix:\n");
+                    printMatrix(matrix);
+                } else {
+                    printf("Invalid key! Use only letters A-Z (I/J combined).\n");
+                }
+                break;
+                
+            case 3:
+                {
+                    char randomKey[26];
+                    char matrix[MATRIX_SIZE][MATRIX_SIZE];
+                    generateRandomKey(randomKey);
+                    printf("Random key generated: %s\n", randomKey);
+                    generateKeyFromString(randomKey, matrix);
+                    printf("Playfair Matrix:\n");
+                    printMatrix(matrix);
+                }
+                break;
+                
+            case 4:
+                printf("Goodbye!\n");
+                return 0;
+                
+            default:
+                printf("Invalid choice! Please try again.\n");
+        }
+        
+        printf("\n====================================\n\n");
+    }
+    
+    return 0;
+}
+
+// Generate sample keys to demonstrate the concept
+void generateAllKeys() {
+    char sampleKeys[][20] = {
+        "MONARCHY", "PLAYFAIR", "KEYWORD", "CIPHER", 
+        "EXAMPLE", "SECRET", "CRYPTO", "ALPHABET"
+    };
+    int numKeys = sizeof(sampleKeys) / sizeof(sampleKeys[0]);
+    
+    char matrix[MATRIX_SIZE][MATRIX_SIZE];
+    
+    printf("Sample Key Patterns (%d examples):\n\n", numKeys);
+    
+    for(int i = 0; i < numKeys; i++) {
+        printf("Key %d: %s\n", i + 1, sampleKeys[i]);
+        generateKeyFromString(sampleKeys[i], matrix);
+        printMatrix(matrix);
+        printf("\n");
+    }
+    
+    // Show mathematical information
+    printf("\n=== Mathematical Information ===\n");
+    printf("Total possible Playfair keys: 25! = 15,511,210,043,330,985,984,000,000\n");
+    printf("That's approximately 1.55 × 10^25 possible keys!\n");
+    printf("For comparison:\n");
+    printf("- 56-bit DES: 2^56 = 72,057,594,037,927,936 keys\n");
+    printf("- 128-bit AES: 2^128 = 3.4 × 10^38 keys\n");
+    printf("Playfair has significantly more keys than DES!\n");
+}
+
+// Generate Playfair matrix from key string
+void generateKeyFromString(char *keyStr, char playfairMatrix[MATRIX_SIZE][MATRIX_SIZE]) {
+    char used[26] = {0};
+    int keyLen = strlen(keyStr);
+    int pos = 0;
+    
+    // Fill with key first
+    for(int i = 0; i < keyLen; i++) {
+        if(isalpha(keyStr[i])) {
+            char ch = toupper(keyStr[i]);
+            if(ch == 'J') ch = 'I'; // Combine I and J
+            
+            if(!used[ch - 'A']) {
+                playfairMatrix[pos / MATRIX_SIZE][pos % MATRIX_SIZE] = ch;
+                used[ch - 'A'] = 1;
+                pos++;
+            }
+        }
+    }
+    
+    // Fill remaining with alphabet
+    for(char ch = 'A'; ch <= 'Z'; ch++) {
+        if(ch == 'J') continue; // Skip J (combined with I)
+        
+        if(!used[ch - 'A']) {
+            playfairMatrix[pos / MATRIX_SIZE][pos % MATRIX_SIZE] = ch;
+            pos++;
+        }
+    }
+}
+
+// Print the Playfair matrix
+void printMatrix(char matrix[MATRIX_SIZE][MATRIX_SIZE]) {
+    printf("+---+---+---+---+---+\n");
+    for(int i = 0; i < MATRIX_SIZE; i++) {
+        printf("|");
+        for(int j = 0; j < MATRIX_SIZE; j++) {
+            printf(" %c |", matrix[i][j]);
+        }
+        printf("\n+---+---+---+---+---+\n");
+    }
+}
+
+// Check if key is valid
+int isValidKey(char *key) {
+    if(strlen(key) == 0) return 0;
+    
+    for(int i = 0; key[i] != '\0'; i++) {
+        if(!isalpha(key[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// Remove duplicate characters from string
+void removeDuplicates(char *str) {
+    int len = strlen(str);
+    int index = 0;
+    
+    for(int i = 0; i < len; i++) {
+        int j;
+        for(j = 0; j < i; j++) {
+            if(str[i] == str[j]) {
+                break;
+            }
+        }
+        if(j == i) {
+            str[index++] = str[i];
+        }
+    }
+    str[index] = '\0';
+}
+
+// Convert string to uppercase
+void toUpperCase(char *str) {
+    for(int i = 0; str[i] != '\0'; i++) {
+        str[i] = toupper(str[i]);
+        if(str[i] == 'J') str[i] = 'I'; // Combine I and J
+    }
+}
+
+// Generate a random key
+void generateRandomKey(char *key) {
+    char alphabet[] = "ABCDEFGHIKLMNOPQRSTUVWXYZ"; // No J (combined with I)
+    int len = strlen(alphabet);
+    
+    // Shuffle the alphabet
+    for(int i = len - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        char temp = alphabet[i];
+        alphabet[i] = alphabet[j];
+        alphabet[j] = temp;
+    }
+    
+    // Take first 5-10 characters as key
+    int keyLength = (rand() % 6) + 5; // Random length between 5-10
+    strncpy(key, alphabet, keyLength);
+    key[keyLength] = '\0';
+}
+
+// Additional function to demonstrate key space calculation
+void calculateKeySpace() {
+    printf("\n=== Key Space Calculation ===\n");
+    printf("Playfair cipher uses a 5x5 grid containing 25 letters (I/J combined)\n");
+    printf("The number of possible keys is the number of ways to arrange 25 letters:\n");
+    printf("25! = 25 × 24 × 23 × ... × 2 × 1\n");
+    printf("25! = 15,511,210,043,330,985,984,000,000\n\n");
+    
+    printf("Comparison with other ciphers:\n");
+    printf("Caesar Cipher: 25 possible keys\n");
+    printf("Simple Substitution: 26! = 4.0 × 10^26 keys\n");
+    printf("Playfair Cipher: 25! = 1.55 × 10^25 keys\n");
+    printf("DES: 2^56 = 7.2 × 10^16 keys\n");
+    printf("AES-128: 2^128 = 3.4 × 10^38 keys\n");
+}
