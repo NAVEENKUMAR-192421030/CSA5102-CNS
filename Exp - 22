@@ -1,0 +1,333 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <time.h>
+
+#define MAX_TEXT_LENGTH 1000
+
+
+void generateRandomKey(char *key, int length);
+void vigenereEncrypt(const char *plaintext, const char *key, char *ciphertext);
+void vigenereDecrypt(const char *ciphertext, const char *key, char *plaintext);
+int isValidText(const char *text);
+void toUpperCase(char *text);
+void printComparison(const char *text1, const char *text2, const char *label1, const char *label2);
+void demonstratePerfectSecrecy();
+
+int main() {
+    char plaintext[MAX_TEXT_LENGTH];
+    char key[MAX_TEXT_LENGTH];
+    char ciphertext[MAX_TEXT_LENGTH];
+    char decrypted[MAX_TEXT_LENGTH];
+    
+    int choice;
+    
+    printf("=== One-Time Pad Vigenere Cipher ===\n\n");
+    printf("One-Time Pad Properties:\n");
+    printf("- Key must be truly random\n");
+    printf("- Key must be as long as the plaintext\n");
+    printf("- Key must never be reused\n");
+    printf("- Provides perfect secrecy when used correctly\n\n");
+    
+    srand(time(NULL)); // Initialize random seed
+    
+    while(1) {
+        printf("\nMenu:\n");
+        printf("1. Encrypt with random one-time pad\n");
+        printf("2. Decrypt with one-time pad\n");
+        printf("3. Demonstrate perfect secrecy\n");
+        printf("4. Show incorrect usage (reused key)\n");
+        printf("5. Mathematical proof of perfect secrecy\n");
+        printf("6. Exit\n");
+        printf("Enter your choice: ");
+        
+        if (scanf("%d", &choice) != 1) {
+            printf("Invalid input!\n");
+            while (getchar() != '\n'); // Clear input buffer
+            continue;
+        }
+        getchar(); // Clear newline
+        
+        switch(choice) {
+            case 1: {
+                printf("\n=== ENCRYPTION WITH ONE-TIME PAD ===\n");
+                printf("Enter plaintext (letters only): ");
+                fgets(plaintext, sizeof(plaintext), stdin);
+                plaintext[strcspn(plaintext, "\n")] = 0; // Remove newline
+                
+                if (!isValidText(plaintext)) {
+                    printf("Error: Only letters A-Z allowed for one-time pad!\n");
+                    break;
+                }
+                
+                toUpperCase(plaintext);
+                
+                // Generate random key of same length as plaintext
+                generateRandomKey(key, strlen(plaintext));
+                
+                printf("Plaintext:  %s\n", plaintext);
+                printf("Key:        %s\n", key);
+                
+                vigenereEncrypt(plaintext, key, ciphertext);
+                printf("Ciphertext: %s\n", ciphertext);
+                
+                printf("\nIMPORTANT: Save this key for decryption!\n");
+                printf("Key: %s\n", key);
+                printf("Never reuse this key!\n");
+                break;
+            }
+            
+            case 2: {
+                printf("\n=== DECRYPTION WITH ONE-TIME PAD ===\n");
+                printf("Enter ciphertext: ");
+                fgets(ciphertext, sizeof(ciphertext), stdin);
+                ciphertext[strcspn(ciphertext, "\n")] = 0;
+                
+                printf("Enter key: ");
+                fgets(key, sizeof(key), stdin);
+                key[strcspn(key, "\n")] = 0;
+                
+                toUpperCase(ciphertext);
+                toUpperCase(key);
+                
+                if (strlen(ciphertext) != strlen(key)) {
+                    printf("Error: Key length must match ciphertext length!\n");
+                    break;
+                }
+                
+                if (!isValidText(ciphertext) || !isValidText(key)) {
+                    printf("Error: Only letters A-Z allowed!\n");
+                    break;
+                }
+                
+                vigenereDecrypt(ciphertext, key, decrypted);
+                printf("Decrypted: %s\n", decrypted);
+                break;
+            }
+            
+            case 3: {
+                printf("\n=== DEMONSTRATING PERFECT SECRECY ===\n");
+                
+                // Original message
+                char original_msg[] = "ATTACKATDAWN";
+                char random_key1[MAX_TEXT_LENGTH];
+                char random_key2[MAX_TEXT_LENGTH];
+                char cipher1[MAX_TEXT_LENGTH];
+                char cipher2[MAX_TEXT_LENGTH];
+                char decrypted1[MAX_TEXT_LENGTH];
+                char decrypted2[MAX_TEXT_LENGTH];
+                
+                printf("Original message: %s\n\n", original_msg);
+                
+                // First encryption with random key
+                generateRandomKey(random_key1, strlen(original_msg));
+                vigenereEncrypt(original_msg, random_key1, cipher1);
+                
+                printf("Encryption 1:\n");
+                printf("Key 1:       %s\n", random_key1);
+                printf("Ciphertext 1: %s\n", cipher1);
+                
+                // Second encryption with different random key
+                generateRandomKey(random_key2, strlen(original_msg));
+                vigenereEncrypt(original_msg, random_key2, cipher2);
+                
+                printf("\nEncryption 2:\n");
+                printf("Key 2:       %s\n", random_key2);
+                printf("Ciphertext 2: %s\n", cipher2);
+                
+                // Show they're different
+                printf("\nDifferent keys -> Different ciphertexts\n");
+                
+                // Verify decryption works
+                vigenereDecrypt(cipher1, random_key1, decrypted1);
+                vigenereDecrypt(cipher2, random_key2, decrypted2);
+                
+                printf("\nVerification:\n");
+                printf("Decrypted 1: %s %s\n", decrypted1, 
+                       strcmp(decrypted1, original_msg) == 0 ? "OK" : "FAIL");
+                printf("Decrypted 2: %s %s\n", decrypted2,
+                       strcmp(decrypted2, original_msg) == 0 ? "OK" : "FAIL");
+                
+                break;
+            }
+            
+            case 4: {
+                printf("\n=== DEMONSTRATING KEY REUSE VULNERABILITY ===\n");
+                
+                char msg1[] = "SECRETMESSAGE";
+                char msg2[] = "HIDDENTEXTXX";
+                char reused_key[MAX_TEXT_LENGTH];
+                char cipher1[MAX_TEXT_LENGTH];
+                char cipher2[MAX_TEXT_LENGTH];
+                
+                printf("Message 1: %s\n", msg1);
+                printf("Message 2: %s\n", msg2);
+                
+                // Generate one key and reuse it (WRONG!)
+                generateRandomKey(reused_key, strlen(msg1));
+                printf("Reused Key: %s\n\n", reused_key);
+                
+                vigenereEncrypt(msg1, reused_key, cipher1);
+                vigenereEncrypt(msg2, reused_key, cipher2);
+                
+                printf("Ciphertext 1: %s\n", cipher1);
+                printf("Ciphertext 2: %s\n", cipher2);
+                
+                // Demonstrate the vulnerability
+                printf("\nSECURITY BREACH: With two ciphertexts and same key,\n");
+                printf("an attacker can recover information!\n");
+                
+                char recovered[MAX_TEXT_LENGTH];
+                printf("\nAttacker computes: (C1 - C2) mod 26 reveals pattern\n");
+                
+                // Simulate what attacker can compute
+                for (int i = 0; i < strlen(msg1); i++) {
+                    int diff = ((cipher1[i] - 'A') - (cipher2[i] - 'A') + 26) % 26;
+                    recovered[i] = diff + 'A';
+                }
+                recovered[strlen(msg1)] = '\0';
+                
+                printf("Pattern revealed: %s\n", recovered);
+                printf("This reveals relationship between the two messages!\n");
+                break;
+            }
+            
+            case 5: {
+                demonstratePerfectSecrecy();
+                break;
+            }
+            
+            case 6:
+                printf("Exiting...\n");
+                return 0;
+                
+            default:
+                printf("Invalid choice! Please try again.\n");
+        }
+    }
+    
+    return 0;
+}
+
+// Generate truly random key for one-time pad
+void generateRandomKey(char *key, int length) {
+    for (int i = 0; i < length; i++) {
+        key[i] = 'A' + (rand() % 26); // Random letter A-Z
+    }
+    key[length] = '\0';
+}
+
+// Vigenere encryption
+void vigenereEncrypt(const char *plaintext, const char *key, char *ciphertext) {
+    int text_len = strlen(plaintext);
+    int key_len = strlen(key);
+    
+    for (int i = 0; i < text_len; i++) {
+        if (isalpha(plaintext[i])) {
+            char plain_char = plaintext[i];
+            char key_char = key[i % key_len];
+            
+            // Vigenere formula: C = (P + K) mod 26
+            ciphertext[i] = ((plain_char - 'A') + (key_char - 'A')) % 26 + 'A';
+        } else {
+            ciphertext[i] = plaintext[i];
+        }
+    }
+    ciphertext[text_len] = '\0';
+}
+
+// Vigenere decryption
+void vigenereDecrypt(const char *ciphertext, const char *key, char *plaintext) {
+    int text_len = strlen(ciphertext);
+    int key_len = strlen(key);
+    
+    for (int i = 0; i < text_len; i++) {
+        if (isalpha(ciphertext[i])) {
+            char cipher_char = ciphertext[i];
+            char key_char = key[i % key_len];
+            
+            // Vigenere formula: P = (C - K + 26) mod 26
+            plaintext[i] = ((cipher_char - 'A') - (key_char - 'A') + 26) % 26 + 'A';
+        } else {
+            plaintext[i] = ciphertext[i];
+        }
+    }
+    plaintext[text_len] = '\0';
+}
+
+// Check if text contains only letters
+int isValidText(const char *text) {
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (!isalpha(text[i]) && !isspace(text[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// Convert text to uppercase
+void toUpperCase(char *text) {
+    for (int i = 0; text[i] != '\0'; i++) {
+        text[i] = toupper(text[i]);
+    }
+}
+
+// Print comparison of two texts
+void printComparison(const char *text1, const char *text2, const char *label1, const char *label2) {
+    printf("%-12s: %s\n", label1, text1);
+    printf("%-12s: %s\n", label2, text2);
+    
+    if (strcmp(text1, text2) == 0) {
+        printf("Status: MATCH\n");
+    } else {
+        printf("Status: DIFFERENT\n");
+    }
+}
+
+// Function to demonstrate cryptographic properties
+void demonstratePerfectSecrecy() {
+    printf("\n=== MATHEMATICAL PROOF OF PERFECT SECRECY ===\n\n");
+    
+    char test_message[] = "HELLO";
+    char sample_keys[5][6] = {"XMCKL", "XZQWP", "ABCDE", "ZZZZZ", "RANDO"};
+    char ciphertext[6];
+    
+    printf("For message: %s\n", test_message);
+    printf("There are 26^%d = %ld possible keys\n", 
+           (int)strlen(test_message), 
+           (long)1 << (5 * 5)); // Approximation for demonstration
+    
+    printf("Each key produces a different ciphertext:\n\n");
+    
+    // Show a few examples
+    printf("Some possible encryptions:\n");
+    for (int i = 0; i < 5; i++) {
+        vigenereEncrypt(test_message, sample_keys[i], ciphertext);
+        printf("Key: %s -> Cipher: %s\n", sample_keys[i], ciphertext);
+    }
+    
+    printf("\nCRITICAL PROPERTIES of One-Time Pad:\n");
+    printf("1. Key Space = Message Space -> Perfect Secrecy\n");
+    printf("2. Each (message, key) pair produces unique ciphertext\n");
+    printf("3. Without key, all messages are equally likely\n");
+    printf("4. Ciphertext reveals NO information about plaintext\n");
+    printf("5. Information-theoretically secure\n\n");
+    
+    printf("Mathematical Proof:\n");
+    printf("- For any ciphertext C and any plaintext P,\n");
+    printf("  there exists exactly one key K such that E(K, P) = C\n");
+    printf("- Therefore: P(C|P) = P(C) for all P, C\n");
+    printf("- This satisfies Shannon's definition of perfect secrecy\n");
+    
+    printf("\nPractical Limitations:\n");
+    printf("- Key distribution problem\n");
+    printf("- Key must be truly random\n");
+    printf("- Key must be as long as message\n");
+    printf("- Key must never be reused\n");
+    
+    printf("\nExample Calculation:\n");
+    printf("For 5-character message: 26^5 = 11,881,376 possible keys\n");
+    printf("For 100-character message: 26^100 ~ 3.14e141 possible keys\n");
+    printf("This is more than atoms in the universe!\n");
+}
