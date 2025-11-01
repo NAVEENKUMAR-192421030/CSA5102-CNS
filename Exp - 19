@@ -1,0 +1,211 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define BLOCK_SIZE 8  
+#define KEY_SIZE 16   
+
+
+
+void prf(const uint8_t *key, const uint8_t *input, size_t input_len, uint8_t *output) {
+    
+    for (size_t i = 0; i < BLOCK_SIZE; i++) {
+        output[i] = key[i % KEY_SIZE] ^ input[i % input_len];
+        
+        output[i] = (output[i] << 3) | (output[i] >> 5);
+    }
+}
+
+
+void xor_blocks(const uint8_t *a, const uint8_t *b, uint8_t *result, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        result[i] = a[i] ^ b[i];
+    }
+}
+
+// CTR Mode Encryption
+void ctr_encrypt(const uint8_t *plaintext, size_t plaintext_len,
+                const uint8_t *key, const uint8_t *nonce,
+                uint8_t *ciphertext) {
+    uint8_t counter[BLOCK_SIZE];
+    uint8_t keystream[BLOCK_SIZE];
+    uint8_t current_nonce[BLOCK_SIZE];
+    
+    // Copy nonce to current_nonce
+    memcpy(current_nonce, nonce, BLOCK_SIZE/2);
+    
+    for (size_t i = 0; i < plaintext_len; i += BLOCK_SIZE) {
+        // Set up counter: nonce || counter_value
+        uint64_t counter_value = i / BLOCK_SIZE;
+        memcpy(current_nonce + BLOCK_SIZE/2, &counter_value, sizeof(counter_value));
+        
+        // Generate keystream
+        prf(key, current_nonce, BLOCK_SIZE, keystream);
+        
+        // XOR plaintext with keystream
+        size_t block_len = (plaintext_len - i < BLOCK_SIZE) ? plaintext_len - i : BLOCK_SIZE;
+        xor_blocks(plaintext + i, keystream, ciphertext + i, block_len);
+    }
+}
+
+// CTR Mode Decryption (same as encryption)
+void ctr_decrypt(const uint8_t *ciphertext, size_t ciphertext_len,
+                const uint8_t *key, const uint8_t *nonce,
+                uint8_t *plaintext) {
+    // CTR decryption is identical to encryption
+    ctr_encrypt(ciphertext, ciphertext_len, key, nonce, plaintext);
+}
+
+// Generate random bytes (simple version for demo)
+void generate_random_bytes(uint8_t *buffer, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        buffer[i] = rand() % 256;
+    }
+}
+
+// Print hex dump
+void print_hex(const char *label, const uint8_t *data, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02X", data[i]);
+    }
+    printf("\n");
+}
+
+// Print text (only printable characters)
+void print_text(const char *label, const uint8_t *data, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] >= 32 && data[i] <= 126) {
+            printf("%c", data[i]);
+        } else {
+            printf(".");
+        }
+    }
+    printf("\n");
+}
+
+int main() {
+    // Initialize random seed
+    srand(42);  // Fixed seed for reproducible results in demo
+    
+    printf("=== CTR (Counter) Mode Encryption/Decryption ===\n\n");
+    
+    // Example data
+    uint8_t plaintext[] = "Hello, World! This is CTR mode demonstration.";
+    size_t plaintext_len = strlen((char*)plaintext);
+    
+    uint8_t key[KEY_SIZE];
+    uint8_t nonce[BLOCK_SIZE/2];  // 32-bit nonce for demo
+    
+    // Generate random key and nonce
+    generate_random_bytes(key, KEY_SIZE);
+    generate_random_bytes(nonce, BLOCK_SIZE/2);
+    
+    // Allocate buffers
+    uint8_t *ciphertext = malloc(plaintext_len);
+    uint8_t *decrypted_text = malloc(plaintext_len);
+    
+    if (!ciphertext || !decrypted_text) {
+        printf("Memory allocation failed!\n");
+        return 1;
+    }
+    
+    printf("DEMO 1: Basic CTR Encryption/Decryption\n");
+    printf("=======================================\n");
+    
+    // Display original data
+    print_text("Original Plaintext", plaintext, plaintext_len);
+    print_hex("Key", key, KEY_SIZE);
+    print_hex("Nonce", nonce, BLOCK_SIZE/2);
+    printf("\n");
+    
+    // Encryption
+    ctr_encrypt(plaintext, plaintext_len, key, nonce, ciphertext);
+    print_text("Ciphertext", ciphertext, plaintext_len);
+    print_hex("Ciphertext Hex", ciphertext, plaintext_len);
+    printf("\n");
+    
+    // Decryption
+    ctr_decrypt(ciphertext, plaintext_len, key, nonce, decrypted_text);
+    print_text("Decrypted Text", decrypted_text, plaintext_len);
+    
+    // Verify
+    if (memcmp(plaintext, decrypted_text, plaintext_len) == 0) {
+        printf("\n✓ SUCCESS: Decryption verified - plaintext matches!\n");
+    } else {
+        printf("\n✗ ERROR: Decryption failed - plaintext doesn't match!\n");
+    }
+    
+    printf("\n\nDEMO 2: Multiple Blocks\n");
+    printf("======================\n");
+    
+    // Test with different message
+    uint8_t plaintext2[] = "Short";
+    size_t plaintext2_len = strlen((char*)plaintext2);
+    uint8_t ciphertext2[plaintext2_len];
+    uint8_t decrypted2[plaintext2_len];
+    
+    print_text("Plaintext", plaintext2, plaintext2_len);
+    ctr_encrypt(plaintext2, plaintext2_len, key, nonce, ciphertext2);
+    print_text("Ciphertext", ciphertext2, plaintext2_len);
+    ctr_decrypt(ciphertext2, plaintext2_len, key, nonce, decrypted2);
+    print_text("Decrypted", decrypted2, plaintext2_len);
+    
+    printf("\n\nDEMO 3: Partial Block\n");
+    printf("====================\n");
+    
+    // Test with message that's not multiple of block size
+    uint8_t plaintext3[] = "This is 27 chars long!!";
+    size_t plaintext3_len = strlen((char*)plaintext3);
+    uint8_t ciphertext3[plaintext3_len];
+    uint8_t decrypted3[plaintext3_len];
+    
+    printf("Message length: %zu bytes (not multiple of block size)\n", plaintext3_len);
+    print_text("Plaintext", plaintext3, plaintext3_len);
+    ctr_encrypt(plaintext3, plaintext3_len, key, nonce, ciphertext3);
+    print_text("Ciphertext", ciphertext3, plaintext3_len);
+    ctr_decrypt(ciphertext3, plaintext3_len, key, nonce, decrypted3);
+    print_text("Decrypted", decrypted3, plaintext3_len);
+    
+    printf("\n\nDEMO 4: Security Properties\n");
+    printf("==========================\n");
+    
+    // Demonstrate that same plaintext with same key+nonce produces same ciphertext
+    uint8_t same_plaintext[] = "Repeat message";
+    uint8_t ciphertext_a[strlen((char*)same_plaintext)];
+    uint8_t ciphertext_b[strlen((char*)same_plaintext)];
+    
+    ctr_encrypt(same_plaintext, strlen((char*)same_plaintext), key, nonce, ciphertext_a);
+    ctr_encrypt(same_plaintext, strlen((char*)same_plaintext), key, nonce, ciphertext_b);
+    
+    if (memcmp(ciphertext_a, ciphertext_b, strlen((char*)same_plaintext)) == 0) {
+        printf("✓ Deterministic: Same input → Same output\n");
+    }
+    
+    // Demonstrate that different nonce produces different ciphertext
+    uint8_t different_nonce[BLOCK_SIZE/2];
+    memcpy(different_nonce, nonce, BLOCK_SIZE/2);
+    different_nonce[0] ^= 0x01;  // Change one byte
+    
+    uint8_t ciphertext_diff_nonce[strlen((char*)same_plaintext)];
+    ctr_encrypt(same_plaintext, strlen((char*)same_plaintext), key, different_nonce, ciphertext_diff_nonce);
+    
+    if (memcmp(ciphertext_a, ciphertext_diff_nonce, strlen((char*)same_plaintext)) != 0) {
+        printf("✓ Nonce-sensitive: Different nonce → Different output\n");
+    }
+    
+    // Clean up
+    free(ciphertext);
+    free(decrypted_text);
+    
+    printf("\n=== CTR Mode Summary ===\n");
+    printf("• Encryption and decryption use the same function\n");
+    printf("• No padding required (stream cipher mode)\n");
+    printf("• Parallelizable encryption/decryption\n");
+    printf("• Random access to ciphertext blocks\n");
+    printf("• Never reuse (key, nonce) pair!\n");
+    
+    return 0;
+}
