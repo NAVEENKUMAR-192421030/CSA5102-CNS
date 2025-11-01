@@ -1,0 +1,358 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+
+#define BLOCK_SIZE 8  
+#define KEY_SIZE 16   
+#define MAX_TEXT_LENGTH 1000
+
+
+void block_cipher_encrypt(const uint8_t *input, const uint8_t *key, uint8_t *output) {
+    
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        output[i] = input[i] ^ key[i % KEY_SIZE];
+        
+        output[i] = (output[i] << 3) | (output[i] >> 5);
+        output[i] ^= 0xAA;  
+    }
+}
+
+
+void block_cipher_decrypt(const uint8_t *input, const uint8_t *key, uint8_t *output) {
+    // Reverse the encryption process
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        uint8_t temp = input[i];
+        temp ^= 0xAA;  // Reverse additional transformation
+        temp = (temp >> 3) | (temp << 5);  // Reverse rotation
+        output[i] = temp ^ key[i % KEY_SIZE];
+    }
+}
+
+// XOR two blocks
+void xor_blocks(const uint8_t *a, const uint8_t *b, uint8_t *result, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        result[i] = a[i] ^ b[i];
+    }
+}
+
+// PKCS7 Padding
+int pkcs7_pad(uint8_t *data, int data_len, int block_size) {
+    int padding_len = block_size - (data_len % block_size);
+    if (padding_len == 0) padding_len = block_size;
+    
+    for (int i = data_len; i < data_len + padding_len; i++) {
+        data[i] = (uint8_t)padding_len;
+    }
+    return data_len + padding_len;
+}
+
+// PKCS7 Unpadding
+int pkcs7_unpad(uint8_t *data, int data_len, int block_size) {
+    if (data_len == 0 || data_len % block_size != 0) {
+        return -1; // Invalid padding
+    }
+    
+    uint8_t padding_len = data[data_len - 1];
+    if (padding_len == 0 || padding_len > block_size) {
+        return -1; // Invalid padding
+    }
+    
+    // Verify padding bytes
+    for (int i = data_len - padding_len; i < data_len; i++) {
+        if (data[i] != padding_len) {
+            return -1; // Invalid padding
+        }
+    }
+    
+    return data_len - padding_len;
+}
+
+// CBC Mode Encryption
+void cbc_encrypt(const uint8_t *plaintext, int plaintext_len,
+                const uint8_t *key, const uint8_t *iv,
+                uint8_t *ciphertext, int *ciphertext_len) {
+    
+    uint8_t previous_block[BLOCK_SIZE];
+    uint8_t current_block[BLOCK_SIZE];
+    uint8_t padded_plaintext[MAX_TEXT_LENGTH];
+    
+    // Copy plaintext and apply padding
+    memcpy(padded_plaintext, plaintext, plaintext_len);
+    int padded_len = pkcs7_pad(padded_plaintext, plaintext_len, BLOCK_SIZE);
+    
+    // Copy IV to previous_block for first iteration
+    memcpy(previous_block, iv, BLOCK_SIZE);
+    
+    for (int i = 0; i < padded_len; i += BLOCK_SIZE) {
+        // XOR with previous ciphertext block (or IV for first block)
+        xor_blocks(padded_plaintext + i, previous_block, current_block, BLOCK_SIZE);
+        
+        // Encrypt the result
+        block_cipher_encrypt(current_block, key, ciphertext + i);
+        
+        // Update previous block for next iteration
+        memcpy(previous_block, ciphertext + i, BLOCK_SIZE);
+    }
+    
+    *ciphertext_len = padded_len;
+}
+
+// CBC Mode Decryption
+void cbc_decrypt(const uint8_t *ciphertext, int ciphertext_len,
+                const uint8_t *key, const uint8_t *iv,
+                uint8_t *plaintext, int *plaintext_len) {
+    
+    uint8_t previous_block[BLOCK_SIZE];
+    uint8_t current_block[BLOCK_SIZE];
+    uint8_t decrypted_block[BLOCK_SIZE];
+    
+    // Copy IV to previous_block for first iteration
+    memcpy(previous_block, iv, BLOCK_SIZE);
+    
+    for (int i = 0; i < ciphertext_len; i += BLOCK_SIZE) {
+        // Decrypt the current block
+        block_cipher_decrypt(ciphertext + i, key, decrypted_block);
+        
+        // XOR with previous ciphertext block (or IV for first block)
+        xor_blocks(decrypted_block, previous_block, plaintext + i, BLOCK_SIZE);
+        
+        // Update previous block for next iteration
+        memcpy(previous_block, ciphertext + i, BLOCK_SIZE);
+    }
+    
+    // Remove padding
+    int unpadded_len = pkcs7_unpad(plaintext, ciphertext_len, BLOCK_SIZE);
+    if (unpadded_len >= 0) {
+        *plaintext_len = unpadded_len;
+    } else {
+        // If unpadding fails, return the padded data
+        *plaintext_len = ciphertext_len;
+    }
+}
+
+// Generate random IV
+void generate_iv(uint8_t *iv) {
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        iv[i] = rand() % 256;
+    }
+}
+
+// Generate random key
+void generate_key(uint8_t *key) {
+    for (int i = 0; i < KEY_SIZE; i++) {
+        key[i] = rand() % 256;
+    }
+}
+
+// Print data in hex format
+void print_hex(const char *label, const uint8_t *data, int len) {
+    printf("%s: ", label);
+    for (int i = 0; i < len; i++) {
+        printf("%02X", data[i]);
+    }
+    printf("\n");
+}
+
+// Print data in text format
+void print_text(const char *label, const uint8_t *data, int len) {
+    printf("%s: ", label);
+    for (int i = 0; i < len; i++) {
+        if (data[i] >= 32 && data[i] <= 126) {
+            printf("%c", data[i]);
+        } else {
+            printf(".");
+        }
+    }
+    printf("\n");
+}
+
+// Print data in block format
+void print_blocks(const char *label, const uint8_t *data, int len) {
+    printf("%s (%d bytes):\n", label, len);
+    for (int i = 0; i < len; i += BLOCK_SIZE) {
+        int block_len = (len - i < BLOCK_SIZE) ? len - i : BLOCK_SIZE;
+        printf("  Block %2d: ", i / BLOCK_SIZE);
+        for (int j = 0; j < block_len; j++) {
+            printf("%02X", data[i + j]);
+        }
+        printf("  |  ");
+        for (int j = 0; j < block_len; j++) {
+            if (data[i + j] >= 32 && data[i + j] <= 126) {
+                printf("%c", data[i + j]);
+            } else {
+                printf(".");
+            }
+        }
+        printf("\n");
+    }
+}
+
+// Demonstrate error propagation in CBC mode
+void demonstrate_error_propagation() {
+    printf("\n=== CBC Error Propagation Demonstration ===\n");
+    
+    uint8_t key[KEY_SIZE] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+                            0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10};
+    uint8_t iv[BLOCK_SIZE] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0};
+    
+    uint8_t plaintext[] = "This is a test message for CBC mode demonstration!";
+    int plaintext_len = strlen((char*)plaintext);
+    
+    uint8_t ciphertext[MAX_TEXT_LENGTH];
+    uint8_t decrypted[MAX_TEXT_LENGTH];
+    int ciphertext_len, decrypted_len;
+    
+    // Normal encryption
+    cbc_encrypt(plaintext, plaintext_len, key, iv, ciphertext, &ciphertext_len);
+    
+    printf("Original encryption/decryption:\n");
+    print_text("Plaintext", plaintext, plaintext_len);
+    print_blocks("Ciphertext", ciphertext, ciphertext_len);
+    
+    cbc_decrypt(ciphertext, ciphertext_len, key, iv, decrypted, &decrypted_len);
+    print_text("Decrypted", decrypted, decrypted_len);
+    printf("Verification: %s\n\n", 
+           memcmp(plaintext, decrypted, plaintext_len) == 0 ? "SUCCESS" : "FAILED");
+    
+    // Introduce error in ciphertext
+    uint8_t corrupted_ciphertext[MAX_TEXT_LENGTH];
+    memcpy(corrupted_ciphertext, ciphertext, ciphertext_len);
+    
+    // Flip one bit in the second block
+    printf("Introducing 1-bit error in ciphertext block 1:\n");
+    corrupted_ciphertext[BLOCK_SIZE + 2] ^= 0x01;  // Flip one bit
+    
+    cbc_decrypt(corrupted_ciphertext, ciphertext_len, key, iv, decrypted, &decrypted_len);
+    print_blocks("Corrupted decryption", decrypted, decrypted_len);
+    
+    // Count errors
+    int error_count = 0;
+    for (int i = 0; i < plaintext_len && i < decrypted_len; i++) {
+        if (plaintext[i] != decrypted[i]) error_count++;
+    }
+    printf("Total bytes corrupted in plaintext: %d\n", error_count);
+}
+
+int main() {
+    srand(time(NULL));  // Initialize random seed
+    
+    printf("=== Cipher Block Chaining (CBC) Mode Encryption ===\n\n");
+    
+    uint8_t key[KEY_SIZE];
+    uint8_t iv[BLOCK_SIZE];
+    uint8_t plaintext[MAX_TEXT_LENGTH];
+    uint8_t ciphertext[MAX_TEXT_LENGTH];
+    uint8_t decrypted[MAX_TEXT_LENGTH];
+    
+    int plaintext_len, ciphertext_len, decrypted_len;
+    int choice;
+    
+    // Generate random key and IV for demonstration
+    generate_key(key);
+    generate_iv(iv);
+    
+    printf("Generated Key: ");
+    for (int i = 0; i < KEY_SIZE; i++) printf("%02X", key[i]);
+    printf("\n");
+    
+    printf("Generated IV:  ");
+    for (int i = 0; i < BLOCK_SIZE; i++) printf("%02X", iv[i]);
+    printf("\n\n");
+    
+    while(1) {
+        printf("CBC Mode Menu:\n");
+        printf("1. Encrypt message\n");
+        printf("2. Decrypt message\n");
+        printf("3. Show CBC properties\n");
+        printf("4. Error propagation demo\n");
+        printf("5. Exit\n");
+        printf("Enter your choice: ");
+        
+        scanf("%d", &choice);
+        getchar();  // Clear newline
+        
+        switch(choice) {
+            case 1: {
+                printf("\nEnter plaintext: ");
+                fgets((char*)plaintext, sizeof(plaintext), stdin);
+                plaintext_len = strlen((char*)plaintext);
+                if (plaintext_len > 0 && plaintext[plaintext_len - 1] == '\n') {
+                    plaintext[--plaintext_len] = 0;  // Remove newline
+                }
+                
+                printf("\n=== CBC Encryption Process ===\n");
+                print_text("Original", plaintext, plaintext_len);
+                print_hex("IV", iv, BLOCK_SIZE);
+                
+                cbc_encrypt(plaintext, plaintext_len, key, iv, ciphertext, &ciphertext_len);
+                
+                print_blocks("Ciphertext", ciphertext, ciphertext_len);
+                printf("Encryption completed. Ciphertext length: %d bytes\n", ciphertext_len);
+                break;
+            }
+            
+            case 2: {
+                printf("\nEnter ciphertext (in hex, without spaces): ");
+                char hex_input[MAX_TEXT_LENGTH * 2 + 1];
+                fgets(hex_input, sizeof(hex_input), stdin);
+                hex_input[strcspn(hex_input, "\n")] = 0;
+                
+                // Convert hex string to bytes
+                ciphertext_len = strlen(hex_input) / 2;
+                for (int i = 0; i < ciphertext_len; i++) {
+                    sscanf(hex_input + i * 2, "%2hhx", &ciphertext[i]);
+                }
+                
+                printf("\n=== CBC Decryption Process ===\n");
+                print_hex("IV", iv, BLOCK_SIZE);
+                print_blocks("Ciphertext", ciphertext, ciphertext_len);
+                
+                cbc_decrypt(ciphertext, ciphertext_len, key, iv, decrypted, &decrypted_len);
+                
+                print_text("Decrypted", decrypted, decrypted_len);
+                printf("Decryption completed. Plaintext length: %d bytes\n", decrypted_len);
+                break;
+            }
+            
+            case 3: {
+                printf("\n=== CBC Mode Properties ===\n");
+                printf("\nKey Characteristics:\n");
+                printf("• Each block is XORed with previous ciphertext before encryption\n");
+                printf("• First block uses IV (Initialization Vector)\n");
+                printf("• Provides semantic security - hides patterns in plaintext\n");
+                printf("• Errors propagate to next block but correct afterwards\n");
+                printf("• Requires padding for partial blocks\n");
+                printf("• Sequential processing (not parallelizable)\n");
+                
+                printf("\nSecurity Advantages:\n");
+                printf("✓ Hides plaintext patterns\n");
+                printf("✓ Same plaintext blocks produce different ciphertext blocks\n");
+                printf("✓ Provides authentication when used with MAC\n");
+                
+                printf("\nLimitations:\n");
+                printf("✗ Sequential encryption/decryption\n");
+                printf("✗ Error propagation affects subsequent block\n");
+                printf("✗ Requires unique IV for each encryption\n");
+                break;
+            }
+            
+            case 4: {
+                demonstrate_error_propagation();
+                break;
+            }
+            
+            case 5:
+                printf("Exiting...\n");
+                return 0;
+                
+            default:
+                printf("Invalid choice! Please try again.\n");
+        }
+        
+        printf("\n--------------------------------------------------\n\n");
+    }
+    
+    return 0;
+}
